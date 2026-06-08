@@ -247,6 +247,8 @@ def _render_market_tab(market: str) -> None:
 
         tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
         slug = tier_label.replace(" ", "_").lower()
+        fetching_key = f"fetching_{market}_{slug}"
+        fetching = st.session_state.get(fetching_key, False)
 
         # Signal filter + refresh row
         seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
@@ -261,9 +263,22 @@ def _render_market_tab(market: str) -> None:
         with btn_col:
             rows_for_ts = st.session_state.get(f"tier_buy_{market}_{slug}") or tier_rows
             last_at = _rows_last_at(rows_for_ts)
-            label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
-            if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
+            if fetching:
+                st.button(
+                    "⏳  Fetching latest details…",
+                    key=f"btn_tier_buy_{market}_{slug}",
+                    use_container_width=True,
+                    type="secondary",
+                    disabled=True,
+                )
                 _refresh_tier_buy(market, tier_label)
+                st.session_state[fetching_key] = False
+                st.rerun()
+            else:
+                label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
+                if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
+                    st.session_state[fetching_key] = True
+                    st.rerun()
 
         if signal_choice == "All" or signal_choice is None:
             sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
