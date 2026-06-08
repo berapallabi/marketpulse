@@ -152,6 +152,8 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         st.error(f"⚠️ Could not fetch quotes: {e}")
         return
 
+    cache.write_quotes(quotes)
+
     articles = []
     try:
         articles = fetch_market_articles(market)
