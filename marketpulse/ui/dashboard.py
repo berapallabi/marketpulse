@@ -197,6 +197,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         for s in top
     ]
     st.session_state[session_key] = rows
+    st.session_state[f"{session_key}_at"] = datetime.now(timezone.utc).strftime("%H:%M UTC")
     st.session_state.pop(f"_prev_rows_{market}_{slug}_buy", None)
 
 
@@ -224,7 +225,7 @@ def _render_market_tab(market: str) -> None:
             tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
             slug = tier_label.replace(" ", "_").lower()
             with tier_tab:
-                seg_col, btn_col = st.columns([6, 1])
+                seg_col, btn_col = st.columns([5, 3])
                 with seg_col:
                     signal_choice = st.segmented_control(
                         "Signal",
@@ -234,7 +235,9 @@ def _render_market_tab(market: str) -> None:
                         key=f"signal_{market}_{slug}",
                     )
                 with btn_col:
-                    if st.button("🔄", key=f"btn_tier_buy_{market}_{slug}", help="Refresh BUY signals"):
+                    last_at = st.session_state.get(f"tier_buy_{market}_{slug}_at")
+                    btn_label = f"🔄  Last refreshed {last_at}" if last_at else "🔄  Refresh BUY"
+                    if st.button(btn_label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="tertiary"):
                         _refresh_tier_buy(market, tier_label)
 
                 if signal_choice == "All" or signal_choice is None:

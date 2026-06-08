@@ -111,6 +111,13 @@ h2, h3 {{
     font-weight: 500;
     padding: 6px 18px;
 }}
+
+/* ── Tier row refresh button ── */
+.stTabs .stTabs [data-testid="baseButton-tertiary"] p {{
+    font-size: 0.8rem !important;
+    opacity: 0.7;
+}}
+
 """
 
 
