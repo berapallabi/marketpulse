@@ -104,6 +104,11 @@ def get_global_css() -> str:
     opacity: 1;
 }}
 
+/* ── Page layout ── */
+.block-container {{
+    padding-top: 1rem;
+}}
+
 /* ── Typography scale ── */
 h1 {{
     font-size: 1.75rem;
