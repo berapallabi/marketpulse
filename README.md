@@ -32,6 +32,17 @@ streamlit run app.py
 
 Opens at `http://localhost:8501`.
 
+## Deploying to Streamlit Cloud
+
+1. Push this repository to GitHub.
+2. Go to [share.streamlit.io](https://share.streamlit.io) and click **New app**.
+3. Select the repository, set the branch to `main`, and set the main file path to `app.py`.
+4. Click **Deploy**.
+
+No secrets or environment variables are required — all data is fetched from public sources.
+
+> **Note**: Streamlit Cloud's filesystem is ephemeral. The SQLite cache (`~/.marketpulse/cache.db`) resets on each restart or redeployment. Refresh data after the app starts.
+
 ## Running Tests
 
 ```bash
