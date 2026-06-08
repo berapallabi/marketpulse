@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from marketpulse.ui.theme import PALETTE
+
 
 def render_stock_detail(
     symbol: str,
@@ -11,25 +13,24 @@ def render_stock_detail(
     technical: dict | None,
     news_items: list[dict],
     ohlcv_df: pd.DataFrame | None = None,
+    key: str = "",
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
-    with st.expander(f"📊 {symbol} — Detail View", expanded=True):
-        st.caption("⚠️ Informational only — not financial advice.")
+    st.markdown(f"#### 📊 {symbol}")
+    if ohlcv_df is not None and not ohlcv_df.empty:
+        _render_price_chart(symbol, ohlcv_df, key=key)
+    else:
+        st.info("No price chart available.")
 
-        if ohlcv_df is not None and not ohlcv_df.empty:
-            _render_price_chart(symbol, ohlcv_df)
-        else:
-            st.info("No price chart available.")
+    if technical:
+        _render_indicators(technical)
+    else:
+        st.info("No technical indicator data available.")
 
-        if technical:
-            _render_indicators(technical)
-        else:
-            st.info("No technical indicator data available.")
-
-        _render_news(news_items)
+    _render_news(news_items)
 
 
-def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
+def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame, key: str = "") -> None:
     df = ohlcv_df.tail(90).copy()
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -37,7 +38,7 @@ def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
         y=df["Close"],
         mode="lines",
         name="Close",
-        line=dict(color="#3b82f6", width=2),
+        line=dict(color=PALETTE["INTERACTIVE"], width=2),
     ))
     fig.update_layout(
         title=f"{symbol} — 90-Day Close Price",
@@ -46,7 +47,7 @@ def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
         height=300,
         margin=dict(l=0, r=0, t=40, b=0),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"price_{symbol}_{key}")
 
 
 def _render_indicators(technical: dict) -> None:
@@ -56,7 +57,7 @@ def _render_indicators(technical: dict) -> None:
     rsi = technical.get("rsi_14")
     with col1:
         if rsi is not None:
-            label = "🔴 Overbought" if rsi > 70 else ("🟢 Oversold" if rsi < 30 else "⚪ Neutral")
+            label = "Overbought" if rsi > 70 else ("Oversold" if rsi < 30 else "Neutral")
             st.metric("RSI (14)", f"{rsi:.1f}", delta=label)
         else:
             st.metric("RSI (14)", "N/A")
@@ -79,7 +80,7 @@ def _render_indicators(technical: dict) -> None:
         sma50 = technical.get("sma_50")
         sma200 = technical.get("sma_200")
         if sma50 is not None and sma200 is not None:
-            cross = "🟢 Golden" if sma50 > sma200 else "🔴 Death"
+            cross = "Golden Cross" if sma50 > sma200 else "Death Cross"
             st.metric("SMA 50 / 200", f"{sma50:.2f} / {sma200:.2f}", delta=f"{cross} Cross")
         else:
             st.metric("SMA 50 / 200", "N/A")
