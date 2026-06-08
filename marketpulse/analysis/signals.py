@@ -14,6 +14,7 @@ class Signal:
     sentiment_score: float
     contributing_factors: list[str]
     generated_at: str
+    cap_tier: str = "Unknown"
 
 
 def generate_signal(technical, sentiment) -> Signal:

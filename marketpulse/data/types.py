@@ -13,6 +13,7 @@ class StockQuote:
     volume: int | None
     currency: str
     fetched_at: str  # ISO 8601 UTC
+    market_cap: float | None = None
 
 
 class DataProviderError(Exception):

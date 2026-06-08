@@ -69,12 +69,14 @@ def test_fetch_ohlcv_returns_dataframe():
     })
     mock_ticker = MagicMock()
     mock_ticker.history.return_value = mock_df
+    mock_ticker.info = {"marketCap": 5e11}
     with patch("marketpulse.data.india.yf.Ticker", return_value=mock_ticker):
         from marketpulse.data.india import fetch_ohlcv_history
-        result = fetch_ohlcv_history("RELIANCE")
-    assert result is not None
-    assert set(result.columns) >= {"Date", "Open", "High", "Low", "Close", "Volume"}
-    assert len(result) == 200
+        df, market_cap = fetch_ohlcv_history("RELIANCE")
+    assert df is not None
+    assert set(df.columns) >= {"Date", "Open", "High", "Low", "Close", "Volume"}
+    assert len(df) == 200
+    assert market_cap == 5e11
 
 
 def test_fetch_ohlcv_returns_none_when_fewer_than_50_rows():
@@ -84,7 +86,8 @@ def test_fetch_ohlcv_returns_none_when_fewer_than_50_rows():
     })
     mock_ticker = MagicMock()
     mock_ticker.history.return_value = mock_df
+    mock_ticker.info = {"marketCap": None}
     with patch("marketpulse.data.india.yf.Ticker", return_value=mock_ticker):
         from marketpulse.data.india import fetch_ohlcv_history
-        result = fetch_ohlcv_history("RELIANCE")
-    assert result is None
+        df, market_cap = fetch_ohlcv_history("RELIANCE")
+    assert df is None

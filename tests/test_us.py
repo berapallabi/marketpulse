@@ -16,6 +16,7 @@ def test_fetch_quotes_returns_us_stock_quotes(mock_us_quotes):
         "dayHigh": 186.0,
         "dayLow": 182.0,
         "regularMarketVolume": 50_000_000,
+        "marketCap": 3e12,
     }
     mock_ticker = MagicMock()
     mock_ticker.info = mock_info
@@ -30,6 +31,7 @@ def test_fetch_quotes_returns_us_stock_quotes(mock_us_quotes):
     assert isinstance(q, StockQuote)
     assert q.market == "US"
     assert q.currency == "USD"
+    assert q.market_cap == 3e12
 
 
 def test_fetch_quotes_raises_on_total_failure():
@@ -73,9 +75,10 @@ def test_fetch_ohlcv_returns_dataframe():
     mock_ticker.history.return_value = mock_df
     with patch("marketpulse.data.us.yf.Ticker", return_value=mock_ticker):
         from marketpulse.data.us import fetch_ohlcv_history
-        result = fetch_ohlcv_history("AAPL")
-    assert result is not None
-    assert len(result) == 200
+        df, market_cap = fetch_ohlcv_history("AAPL")
+    assert df is not None
+    assert len(df) == 200
+    assert market_cap is None  # US market_cap comes from fetch_quotes, not here
 
 
 def test_fetch_ohlcv_returns_none_when_fewer_than_50_rows():
@@ -87,5 +90,5 @@ def test_fetch_ohlcv_returns_none_when_fewer_than_50_rows():
     mock_ticker.history.return_value = mock_df
     with patch("marketpulse.data.us.yf.Ticker", return_value=mock_ticker):
         from marketpulse.data.us import fetch_ohlcv_history
-        result = fetch_ohlcv_history("AAPL")
-    assert result is None
+        df, market_cap = fetch_ohlcv_history("AAPL")
+    assert df is None

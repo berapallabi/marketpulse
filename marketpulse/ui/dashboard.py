@@ -79,6 +79,7 @@ def render_dashboard() -> None:
 
 
 def _refresh_market(market: str) -> None:
+    from marketpulse.analysis.cap_tiers import classify_cap_tier
     from marketpulse.analysis.indicators import compute_indicators
     from marketpulse.analysis.market_summary import compute_market_summary
     from marketpulse.analysis.signals import generate_signal
@@ -116,7 +117,8 @@ def _refresh_market(market: str) -> None:
 
     with st.spinner("Computing signals…"):
         for quote in quotes:
-            ohlcv = fetch_ohlcv_history(quote.symbol)
+            ohlcv, mc = fetch_ohlcv_history(quote.symbol)
+            market_cap = mc if market == "IN" else quote.market_cap
             if ohlcv is None:
                 unavailable += 1
                 continue
@@ -130,6 +132,7 @@ def _refresh_market(market: str) -> None:
             sentiment.market = market
 
             signal = generate_signal(technical, sentiment)
+            signal.cap_tier = classify_cap_tier(market_cap, market)
 
             cache.write_technical(technical)
             cache.write_sentiment(sentiment)
@@ -151,11 +154,12 @@ def _refresh_market(market: str) -> None:
 
     # Clear selection state so the drill-down resets after a refresh
     st.session_state.pop(f"selected_{market}", None)
-    for _f in ["all", "buy", "sell", "hold"]:
-        st.session_state.pop(f"_prev_rows_{market}_{_f}", None)
+    for _key in [k for k in st.session_state if k.startswith(f"_prev_rows_{market}_")]:
+        st.session_state.pop(_key, None)
 
 
 def _render_market_tab(market: str) -> None:
+    from marketpulse.analysis.cap_tiers import INDIA_TIER_ORDER, US_TIER_ORDER
     from marketpulse.ui.sentiment_gauge import render_sentiment_gauge
     from marketpulse.ui.stock_detail import render_stock_detail
     from marketpulse.ui.stock_list import render_stock_list
@@ -171,24 +175,29 @@ def _render_market_tab(market: str) -> None:
     render_sentiment_gauge(summary, "🇮🇳 Market Sentiment" if market == "IN" else "🇺🇸 Market Sentiment")
 
     signal_rows = cache.read_signals(market)
+    tier_labels = INDIA_TIER_ORDER if market == "IN" else US_TIER_ORDER
 
-    tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
-    with tab_all:
-        sym = render_stock_list(signal_rows, market, filter_signal="ALL")
-        if sym:
-            st.session_state[f"selected_{market}"] = sym
-    with tab_buy:
-        sym = render_stock_list(signal_rows, market, filter_signal="BUY")
-        if sym:
-            st.session_state[f"selected_{market}"] = sym
-    with tab_sell:
-        sym = render_stock_list(signal_rows, market, filter_signal="SELL")
-        if sym:
-            st.session_state[f"selected_{market}"] = sym
-    with tab_hold:
-        sym = render_stock_list(signal_rows, market, filter_signal="HOLD")
-        if sym:
-            st.session_state[f"selected_{market}"] = sym
+    tier_tabs = st.tabs(tier_labels)
+    for tier_label, tier_tab in zip(tier_labels, tier_tabs):
+        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+        with tier_tab:
+            tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
+            with tab_all:
+                sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+            with tab_buy:
+                sym = render_stock_list(tier_rows, market, filter_signal="BUY", key_prefix=tier_label)
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+            with tab_sell:
+                sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+            with tab_hold:
+                sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
 
     # Drill-down — persists across sub-tab switches; cleared on refresh
     selected_symbol = st.session_state.get(f"selected_{market}")

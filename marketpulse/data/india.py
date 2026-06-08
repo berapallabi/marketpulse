@@ -47,21 +47,22 @@ def fetch_quotes(symbols: list[str]) -> list[StockQuote]:
     return results
 
 
-def fetch_ohlcv_history(symbol: str, days: int = 200) -> pd.DataFrame | None:
-    """Fetch daily OHLCV history for an NSE symbol using yfinance (.NS suffix)."""
+def fetch_ohlcv_history(symbol: str, days: int = 200) -> tuple[pd.DataFrame | None, float | None]:
+    """Fetch daily OHLCV history and market cap for an NSE symbol via yfinance."""
     try:
         ticker = yf.Ticker(f"{symbol}.NS")
+        market_cap = _float(ticker.info.get("marketCap"))
         df = ticker.history(period=f"{days}d", interval="1d", auto_adjust=True)
         if df is None or len(df) < 50:
-            return None
+            return None, market_cap
         df = df.reset_index()
         if "Datetime" in df.columns:
             df = df.rename(columns={"Datetime": "Date"})
         df = df[["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
         df = df.sort_values("Date").reset_index(drop=True)
-        return df
+        return df, market_cap
     except Exception:
-        return None
+        return None, None
 
 
 def _float(val) -> float | None:

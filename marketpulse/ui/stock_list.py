@@ -12,7 +12,12 @@ _SIGNAL_COLOURS = {
 }
 
 
-def render_stock_list(signal_rows: list[dict], market: str, filter_signal: str = "ALL") -> str | None:
+def render_stock_list(
+    signal_rows: list[dict],
+    market: str,
+    filter_signal: str = "ALL",
+    key_prefix: str = "",
+) -> str | None:
     """Render filtered, colour-coded signal table. Returns selected symbol on new click, else None."""
     st.caption("⚠️ Informational only — not financial advice.")
 
@@ -29,6 +34,10 @@ def render_stock_list(signal_rows: list[dict], market: str, filter_signal: str =
 
     filtered = filtered.sort_values("Confidence", ascending=False).reset_index(drop=True)
 
+    _slug = f"{key_prefix.replace(' ', '_').lower()}_" if key_prefix else ""
+    table_key = f"table_{market}_{_slug}{filter_signal.lower()}"
+    prev_key = f"_prev_rows_{market}_{_slug}{filter_signal.lower()}"
+
     styled = filtered.style.apply(_colour_signal_col, axis=1)
     event = st.dataframe(
         styled,
@@ -36,7 +45,7 @@ def render_stock_list(signal_rows: list[dict], market: str, filter_signal: str =
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key=f"table_{market}_{filter_signal.lower()}",
+        key=table_key,
     )
 
     unavailable = st.session_state.get(f"unavailable_{market}", 0)
@@ -44,7 +53,6 @@ def render_stock_list(signal_rows: list[dict], market: str, filter_signal: str =
         st.caption(f"{unavailable} stocks unavailable")
 
     # Return symbol only when the row selection has changed (new click detected)
-    prev_key = f"_prev_rows_{market}_{filter_signal.lower()}"
     current_rows = list(event.selection.rows) if event and event.selection else []
     if current_rows != st.session_state.get(prev_key, []):
         st.session_state[prev_key] = current_rows

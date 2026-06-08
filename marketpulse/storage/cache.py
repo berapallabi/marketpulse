@@ -111,6 +111,11 @@ def init_db(db_path: Path | None = None) -> None:
             );
         """)
         conn.commit()
+        try:
+            conn.execute("ALTER TABLE signals ADD COLUMN cap_tier TEXT DEFAULT 'Unknown'")
+            conn.commit()
+        except Exception:
+            pass
     finally:
         conn.close()
 
@@ -198,6 +203,7 @@ def write_signals(signals: list, db_path: Path | None = None) -> None:
                 "sentiment_score": sig.sentiment_score,
                 "contributing_factors": json.dumps(sig.contributing_factors),
                 "generated_at": sig.generated_at,
+                "cap_tier": sig.cap_tier,
             })
         conn.commit()
     finally:

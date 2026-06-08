@@ -25,6 +25,7 @@ class _Signal:
     sentiment_score: float
     contributing_factors: list
     generated_at: str
+    cap_tier: str = "Unknown"
 
 
 @dataclass
@@ -93,3 +94,13 @@ def test_check_staleness_false_when_fresh(tmp_db):
 def test_check_staleness_true_when_absent(tmp_db):
     init_db(tmp_db)
     assert check_staleness("US", tmp_db) is True
+
+
+def test_write_signals_persists_cap_tier(tmp_db):
+    init_db(tmp_db)
+    now = datetime.now(timezone.utc).isoformat()
+    sig = _Signal("AAPL", "US", "BUY", 72, 75.0, 65.0, ["RSI:BUY"], now, cap_tier="Mega Cap")
+    write_signals([sig], tmp_db)
+    rows = read_signals("US", tmp_db)
+    assert len(rows) == 1
+    assert rows[0]["cap_tier"] == "Mega Cap"
