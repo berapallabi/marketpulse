@@ -145,38 +145,37 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
     session_key = f"tier_buy_{market}_{slug}"
 
     signals = []
-    with st.spinner(f"Fetching BUY signals for {tier_label}…"):
-        try:
-            quotes = fetch_quotes(symbols)
-        except DataProviderError as e:
-            st.session_state[session_key] = []
-            st.error(f"⚠️ Could not fetch quotes: {e}")
-            return
+    try:
+        quotes = fetch_quotes(symbols)
+    except DataProviderError as e:
+        st.session_state[session_key] = []
+        st.error(f"⚠️ Could not fetch quotes: {e}")
+        return
 
-        articles = []
-        try:
-            articles = fetch_market_articles(market)
-        except Exception:
-            pass
+    articles = []
+    try:
+        articles = fetch_market_articles(market)
+    except Exception:
+        pass
 
-        for quote in quotes:
-            try:
-                ohlcv, mc = fetch_ohlcv_history(quote.symbol)
-                if ohlcv is None:
-                    continue
-                market_cap = mc if market == "IN" else quote.market_cap
-                if classify_cap_tier(market_cap, market) != tier_label:
-                    continue
-                technical = compute_indicators(quote.symbol, market, ohlcv)
-                if technical is None:
-                    continue
-                sentiment = score_articles_for_stock(articles, quote.symbol, quote.company_name)
-                sentiment.market = market
-                signal = generate_signal(technical, sentiment)
-                signal.cap_tier = tier_label
-                signals.append(signal)
-            except Exception:
+    for quote in quotes:
+        try:
+            ohlcv, mc = fetch_ohlcv_history(quote.symbol)
+            if ohlcv is None:
                 continue
+            market_cap = mc if market == "IN" else quote.market_cap
+            if classify_cap_tier(market_cap, market) != tier_label:
+                continue
+            technical = compute_indicators(quote.symbol, market, ohlcv)
+            if technical is None:
+                continue
+            sentiment = score_articles_for_stock(articles, quote.symbol, quote.company_name)
+            sentiment.market = market
+            signal = generate_signal(technical, sentiment)
+            signal.cap_tier = tier_label
+            signals.append(signal)
+        except Exception:
+            continue
 
     top = _top_buy_signals(signals, limit=20)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -220,18 +219,13 @@ def _render_market_tab(market: str) -> None:
     list_col, detail_col = st.columns([3, 2], gap="large")
 
     with list_col:
-        # Tier selector row — left: tier pills, right: fetch status slot
-        tier_sel_col, tier_status_col = st.columns([2, 3], vertical_alignment="center")
-        with tier_sel_col:
-            tier_label = st.segmented_control(
-                "Tier",
-                options=tier_labels,
-                default=tier_labels[0],
-                label_visibility="collapsed",
-                key=f"tier_{market}",
-            )
-        with tier_status_col:
-            tier_status_slot = st.empty()
+        tier_label = st.segmented_control(
+            "Tier",
+            options=tier_labels,
+            default=tier_labels[0],
+            label_visibility="collapsed",
+            key=f"tier_{market}",
+        )
 
         if tier_label is None:
             tier_label = tier_labels[0]
@@ -253,8 +247,7 @@ def _render_market_tab(market: str) -> None:
             last_at = st.session_state.get(f"tier_buy_{market}_{slug}_at")
             label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
             if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
-                with tier_status_slot:
-                    _refresh_tier_buy(market, tier_label)
+                _refresh_tier_buy(market, tier_label)
 
         if signal_choice == "All" or signal_choice is None:
             sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
