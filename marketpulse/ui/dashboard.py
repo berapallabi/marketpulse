@@ -220,56 +220,67 @@ def _render_market_tab(market: str) -> None:
     list_col, detail_col = st.columns([3, 2], gap="large")
 
     with list_col:
-        _, tier_status_col = st.columns([1, 1])
+        # Tier selector row — left: tier pills, right: fetch status slot
+        tier_sel_col, tier_status_col = st.columns([2, 3], vertical_alignment="center")
+        with tier_sel_col:
+            tier_label = st.segmented_control(
+                "Tier",
+                options=tier_labels,
+                default=tier_labels[0],
+                label_visibility="collapsed",
+                key=f"tier_{market}",
+            )
         with tier_status_col:
             tier_status_slot = st.empty()
 
-        tier_tabs = st.tabs(tier_labels)
-        for tier_label, tier_tab in zip(tier_labels, tier_tabs):
-            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
-            slug = tier_label.replace(" ", "_").lower()
-            with tier_tab:
-                seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
-                with seg_col:
-                    signal_choice = st.segmented_control(
-                        "Signal",
-                        options=["All", "BUY", "SELL", "HOLD"],
-                        default="All",
-                        label_visibility="collapsed",
-                        key=f"signal_{market}_{slug}",
-                    )
-                with btn_col:
-                    last_at = st.session_state.get(f"tier_buy_{market}_{slug}_at")
-                    label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
-                    if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
-                        with tier_status_slot:
-                            _refresh_tier_buy(market, tier_label)
+        if tier_label is None:
+            tier_label = tier_labels[0]
 
-                if signal_choice == "All" or signal_choice is None:
-                    sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "BUY":
-                    tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
-                    if tier_buy_rows is None:
-                        buy_data = tier_rows
-                    elif len(tier_buy_rows) == 0:
-                        st.caption("No BUY signals found for this tier.")
-                        buy_data = None
-                    else:
-                        buy_data = tier_buy_rows
-                    if buy_data is not None:
-                        sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
-                        if sym:
-                            st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "SELL":
-                    sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "HOLD":
-                    sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
+        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+        slug = tier_label.replace(" ", "_").lower()
+
+        # Signal filter + refresh row
+        seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
+        with seg_col:
+            signal_choice = st.segmented_control(
+                "Signal",
+                options=["All", "BUY", "SELL", "HOLD"],
+                default="All",
+                label_visibility="collapsed",
+                key=f"signal_{market}_{slug}",
+            )
+        with btn_col:
+            last_at = st.session_state.get(f"tier_buy_{market}_{slug}_at")
+            label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
+            if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
+                with tier_status_slot:
+                    _refresh_tier_buy(market, tier_label)
+
+        if signal_choice == "All" or signal_choice is None:
+            sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
+            if sym:
+                st.session_state[f"selected_{market}"] = sym
+        elif signal_choice == "BUY":
+            tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
+            if tier_buy_rows is None:
+                buy_data = tier_rows
+            elif len(tier_buy_rows) == 0:
+                st.caption("No BUY signals found for this tier.")
+                buy_data = None
+            else:
+                buy_data = tier_buy_rows
+            if buy_data is not None:
+                sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+        elif signal_choice == "SELL":
+            sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
+            if sym:
+                st.session_state[f"selected_{market}"] = sym
+        elif signal_choice == "HOLD":
+            sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
+            if sym:
+                st.session_state[f"selected_{market}"] = sym
 
     with detail_col:
         selected_symbol = st.session_state.get(f"selected_{market}")

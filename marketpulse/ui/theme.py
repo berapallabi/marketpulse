@@ -58,29 +58,6 @@ def get_global_css() -> str:
     border-bottom: 3px solid {p['NEUTRAL_DARK']};
 }}
 
-/* ── Level 2: Tier tabs (Large / Mid / Small Cap) ── */
-.stTabs .stTabs [data-baseweb="tab-list"] {{
-    gap: 2px;
-    background-color: {p['NEUTRAL_LIGHT']};
-    padding: 4px 4px 0 4px;
-    border-radius: 6px 6px 0 0;
-    width: fit-content;
-    margin-top: 12px;
-}}
-.stTabs .stTabs [data-baseweb="tab"] {{
-    padding: 7px 18px;
-    border-radius: 4px 4px 0 0;
-    font-size: 13px;
-    font-weight: 500;
-    color: {p['NEUTRAL_DARK']};
-    background-color: {p['NEUTRAL_MID']};
-}}
-.stTabs .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-    background-color: {p['NEUTRAL_LIGHT']};
-    color: {p['PRIMARY']};
-    font-weight: 600;
-    border-bottom: 2px solid {p['NEUTRAL_DARK']};
-}}
 
 
 /* ── Page layout ── */
