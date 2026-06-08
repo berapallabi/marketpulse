@@ -234,14 +234,14 @@ def _render_market_tab(market: str) -> None:
     tier_tabs = st.tabs(tier_labels)
     for tier_tab, tier_label in zip(tier_tabs, tier_labels):
         with tier_tab:
-            list_col, detail_col = st.columns([3, 2], gap="large")
             tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
             slug = tier_label.replace(" ", "_").lower()
             fetching_key = f"fetching_{market}_{slug}"
             fetching = st.session_state.get(fetching_key, False)
 
-            with list_col:
-                # Signal filter + refresh row
+            # Signal filter + refresh confined to left 60% — right side left empty
+            filter_col, _ = st.columns([3, 2], gap="large")
+            with filter_col:
                 seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
                 with seg_col:
                     signal_choice = st.segmented_control(
@@ -271,6 +271,9 @@ def _render_market_tab(market: str) -> None:
                             st.session_state[fetching_key] = True
                             st.rerun()
 
+            # Table | detail — second row, aligns detail panel with the table
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            with list_col:
                 if signal_choice == "All" or signal_choice is None:
                     sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
                     if sym:
