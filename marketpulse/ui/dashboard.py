@@ -254,8 +254,8 @@ def _render_market_tab(market: str) -> None:
                 with seg_col:
                     signal_choice = st.segmented_control(
                         "Signal",
-                        options=["All", "BUY", "SELL", "HOLD"],
-                        default="All",
+                        options=["Buy", "Watchlist", "My Holdings"],
+                        default="Buy",
                         label_visibility="collapsed",
                         key=f"signal_{market}_{slug}",
                     )
@@ -282,11 +282,7 @@ def _render_market_tab(market: str) -> None:
             # Table | detail — second row, aligns detail panel with the table
             list_col, detail_col = st.columns([3, 2], gap="large")
             with list_col:
-                if signal_choice == "All" or signal_choice is None:
-                    sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "BUY":
+                if signal_choice == "Buy" or signal_choice is None:
                     tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
                     if tier_buy_rows is None:
                         buy_data = tier_rows
@@ -299,14 +295,24 @@ def _render_market_tab(market: str) -> None:
                         sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
                         if sym:
                             st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "SELL":
-                    sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "HOLD":
-                    sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
-                    if sym:
-                        st.session_state[f"selected_{market}"] = sym
+                elif signal_choice == "Watchlist":
+                    watchlist_symbols = set(cache.read_watchlist(market))
+                    watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
+                    if watchlist_rows:
+                        sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=tier_label)
+                        if sym:
+                            st.session_state[f"selected_{market}"] = sym
+                    else:
+                        st.caption("No stocks in your watchlist yet.")
+                elif signal_choice == "My Holdings":
+                    holdings_symbols = set(cache.read_holdings(market))
+                    holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
+                    if holdings_rows:
+                        sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=tier_label)
+                        if sym:
+                            st.session_state[f"selected_{market}"] = sym
+                    else:
+                        st.caption("No holdings added yet.")
 
             with detail_col:
                 selected_symbol = st.session_state.get(f"selected_{market}")

@@ -4,6 +4,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from marketpulse.storage.cache import (
+    add_to_holdings,
+    add_to_watchlist,
+    read_holdings,
+    read_watchlist,
+    remove_from_holdings,
+    remove_from_watchlist,
+)
 from marketpulse.ui.theme import PALETTE
 
 
@@ -17,6 +25,7 @@ def render_stock_detail(
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
     st.markdown(f"#### 📊 {symbol}")
+    _render_list_actions(symbol, market, key)
     if ohlcv_df is not None and not ohlcv_df.empty:
         _render_price_chart(symbol, ohlcv_df, key=key)
     else:
@@ -28,6 +37,30 @@ def render_stock_detail(
         st.info("No technical indicator data available.")
 
     _render_news(news_items)
+
+
+def _render_list_actions(symbol: str, market: str, key: str = "") -> None:
+    in_watchlist = symbol in read_watchlist(market)
+    in_holdings = symbol in read_holdings(market)
+    col_w, col_h = st.columns(2)
+    with col_w:
+        if in_watchlist:
+            if st.button("✓ Remove from Watchlist", key=f"wl_{symbol}_{market}_{key}", use_container_width=True, type="secondary"):
+                remove_from_watchlist(symbol, market)
+                st.rerun()
+        else:
+            if st.button("+ Add to Watchlist", key=f"wl_{symbol}_{market}_{key}", use_container_width=True, type="secondary"):
+                add_to_watchlist(symbol, market)
+                st.rerun()
+    with col_h:
+        if in_holdings:
+            if st.button("✓ Remove from Holdings", key=f"hd_{symbol}_{market}_{key}", use_container_width=True, type="secondary"):
+                remove_from_holdings(symbol, market)
+                st.rerun()
+        else:
+            if st.button("+ Add to Holdings", key=f"hd_{symbol}_{market}_{key}", use_container_width=True, type="secondary"):
+                add_to_holdings(symbol, market)
+                st.rerun()
 
 
 def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame, key: str = "") -> None:
