@@ -14,7 +14,7 @@ def render_stock_detail(
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
     with st.expander(f"📊 {symbol} — Detail View", expanded=True):
-        st.warning("⚠️ Informational only — not financial advice.")
+        st.caption("⚠️ Informational only — not financial advice.")
 
         if ohlcv_df is not None and not ohlcv_df.empty:
             _render_price_chart(symbol, ohlcv_df)

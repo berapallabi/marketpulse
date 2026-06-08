@@ -12,24 +12,16 @@ _SIGNAL_COLOURS = {
 }
 
 
-def render_stock_list(signal_rows: list[dict], market: str) -> str | None:
-    """Render filtered, colour-coded signal table. Returns selected symbol or None."""
-    st.warning("⚠️ Informational only — not financial advice.")
+def render_stock_list(signal_rows: list[dict], market: str, filter_signal: str = "ALL") -> str | None:
+    """Render filtered, colour-coded signal table. Returns selected symbol on new click, else None."""
+    st.caption("⚠️ Informational only — not financial advice.")
 
     if not signal_rows:
         st.info("Click 🔄 Refresh to load data.")
         return None
 
     df = _build_df(signal_rows)
-
-    filter_option = st.radio(
-        "Filter by signal",
-        ["ALL", "BUY", "HOLD", "SELL"],
-        horizontal=True,
-        key=f"filter_{market}",
-    )
-
-    filtered = df if filter_option == "ALL" else df[df["Signal"] == filter_option]
+    filtered = df if filter_signal == "ALL" else df[df["Signal"] == filter_signal]
 
     if filtered.empty:
         st.caption("No stocks match the selected filter.")
@@ -44,18 +36,20 @@ def render_stock_list(signal_rows: list[dict], market: str) -> str | None:
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key=f"table_{market}",
+        key=f"table_{market}_{filter_signal.lower()}",
     )
 
     unavailable = st.session_state.get(f"unavailable_{market}", 0)
     if unavailable > 0:
         st.caption(f"{unavailable} stocks unavailable")
 
-    # Return selected symbol if a row was clicked
-    if event and event.selection and event.selection.rows:
-        idx = event.selection.rows[0]
-        if idx < len(filtered):
-            return filtered.iloc[idx]["Symbol"]
+    # Return symbol only when the row selection has changed (new click detected)
+    prev_key = f"_prev_rows_{market}_{filter_signal.lower()}"
+    current_rows = list(event.selection.rows) if event and event.selection else []
+    if current_rows != st.session_state.get(prev_key, []):
+        st.session_state[prev_key] = current_rows
+        if current_rows and current_rows[0] < len(filtered):
+            return filtered.iloc[current_rows[0]]["Symbol"]
 
     return None
 

@@ -19,26 +19,48 @@ def _is_market_closed(market: str) -> bool:
         return not (14.5 <= hour_utc <= 21.0)
 
 
+_TAB_CSS = """
+<style>
+/* Tab strip background */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px;
+    background-color: #f0f2f6;
+    padding: 6px 6px 0 6px;
+    border-radius: 8px 8px 0 0;
+}
+/* Inactive tab */
+.stTabs [data-baseweb="tab"] {
+    padding: 10px 24px;
+    border-radius: 6px 6px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+    background-color: #e2e5ea;
+}
+/* Active tab */
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background-color: #ffffff;
+    color: #0f1117;
+    font-weight: 700;
+    border-bottom: 3px solid #ff4b4b;
+}
+</style>
+"""
+
+
 def render_dashboard() -> None:
     st.set_page_config(page_title="MarketPulse", page_icon="📈", layout="wide")
+    st.markdown(_TAB_CSS, unsafe_allow_html=True)
     st.title("📈 MarketPulse Investment Dashboard")
-    st.warning("⚠️ Informational only — not financial advice. Signals are generated algorithmically.")
+    st.caption("⚠️ Informational only — not financial advice. Signals are generated algorithmically.")
 
     cache.init_db()
 
     with st.sidebar:
         st.header("Controls")
         refresh_clicked = st.button("🔄 Refresh Data", use_container_width=True)
-
-    # --- Sentiment gauges header ---
-    from marketpulse.ui.sentiment_gauge import render_sentiment_gauge
-    col_in, col_us = st.columns(2)
-    with col_in:
-        summary_in = cache.read_market_summary("IN")
-        render_sentiment_gauge(summary_in, "🇮🇳 India")
-    with col_us:
-        summary_us = cache.read_market_summary("US")
-        render_sentiment_gauge(summary_us, "🇺🇸 US")
+        if cache.check_staleness("IN") or cache.check_staleness("US"):
+            st.caption("Data may be stale (> 1 hour old).")
 
     tab_in, tab_us = st.tabs(["🇮🇳 India (Nifty 50)", "🇺🇸 US (S&P 100)"])
 
@@ -127,8 +149,14 @@ def _refresh_market(market: str) -> None:
     st.session_state[f"ohlcv_{market}"] = ohlcv_cache
     st.session_state[f"unavailable_{market}"] = unavailable
 
+    # Clear selection state so the drill-down resets after a refresh
+    st.session_state.pop(f"selected_{market}", None)
+    for _f in ["all", "buy", "sell", "hold"]:
+        st.session_state.pop(f"_prev_rows_{market}_{_f}", None)
+
 
 def _render_market_tab(market: str) -> None:
+    from marketpulse.ui.sentiment_gauge import render_sentiment_gauge
     from marketpulse.ui.stock_detail import render_stock_detail
     from marketpulse.ui.stock_list import render_stock_list
 
@@ -139,14 +167,31 @@ def _render_market_tab(market: str) -> None:
     if _is_market_closed(market):
         st.info("🔴 Market Closed — showing last-close data")
 
-    stale = cache.check_staleness(market)
-    if stale and not error:
-        st.warning("⚠️ Data may be stale (> 1 hour old). Click Refresh to update.")
+    summary = cache.read_market_summary(market)
+    render_sentiment_gauge(summary, "🇮🇳 Market Sentiment" if market == "IN" else "🇺🇸 Market Sentiment")
 
     signal_rows = cache.read_signals(market)
-    selected_symbol = render_stock_list(signal_rows, market)
 
-    # Drill-down
+    tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
+    with tab_all:
+        sym = render_stock_list(signal_rows, market, filter_signal="ALL")
+        if sym:
+            st.session_state[f"selected_{market}"] = sym
+    with tab_buy:
+        sym = render_stock_list(signal_rows, market, filter_signal="BUY")
+        if sym:
+            st.session_state[f"selected_{market}"] = sym
+    with tab_sell:
+        sym = render_stock_list(signal_rows, market, filter_signal="SELL")
+        if sym:
+            st.session_state[f"selected_{market}"] = sym
+    with tab_hold:
+        sym = render_stock_list(signal_rows, market, filter_signal="HOLD")
+        if sym:
+            st.session_state[f"selected_{market}"] = sym
+
+    # Drill-down — persists across sub-tab switches; cleared on refresh
+    selected_symbol = st.session_state.get(f"selected_{market}")
     if selected_symbol:
         technical = cache.read_technical(selected_symbol, market)
         news_items = cache.read_news(selected_symbol, market)
