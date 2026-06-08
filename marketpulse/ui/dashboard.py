@@ -48,6 +48,11 @@ _TAB_CSS = """
 """
 
 
+def _top_buy_signals(signals: list, limit: int = 20) -> list:
+    buys = [s for s in signals if s.signal_type == "BUY"]
+    return sorted(buys, key=lambda s: s.confidence_score, reverse=True)[:limit]
+
+
 def render_dashboard() -> None:
     st.set_page_config(page_title="MarketPulse", page_icon="📈", layout="wide")
     st.markdown(_TAB_CSS, unsafe_allow_html=True)
@@ -56,20 +61,7 @@ def render_dashboard() -> None:
 
     cache.init_db()
 
-    with st.sidebar:
-        st.header("Controls")
-        refresh_clicked = st.button("🔄 Refresh Data", use_container_width=True)
-        if cache.check_staleness("IN") or cache.check_staleness("US"):
-            st.caption("Data may be stale (> 1 hour old).")
-
     tab_in, tab_us = st.tabs(["🇮🇳 India (Nifty 50)", "🇺🇸 US (S&P 100)"])
-
-    if refresh_clicked:
-        with tab_in:
-            _refresh_market("IN")
-        with tab_us:
-            _refresh_market("US")
-        st.rerun()
 
     with tab_in:
         _render_market_tab("IN")
@@ -156,6 +148,81 @@ def _refresh_market(market: str) -> None:
     st.session_state.pop(f"selected_{market}", None)
     for _key in [k for k in st.session_state if k.startswith(f"_prev_rows_{market}_")]:
         st.session_state.pop(_key, None)
+    for _key in [k for k in st.session_state if k.startswith(f"tier_buy_{market}_")]:
+        st.session_state.pop(_key, None)
+
+
+def _refresh_tier_buy(market: str, tier_label: str) -> None:
+    from marketpulse.analysis.cap_tiers import classify_cap_tier
+    from marketpulse.analysis.indicators import compute_indicators
+    from marketpulse.analysis.signals import generate_signal
+    from marketpulse.data.sentiment import fetch_market_articles, score_articles_for_stock
+    from marketpulse.data.types import DataProviderError
+
+    if market == "IN":
+        from marketpulse.data.india import fetch_ohlcv_history, fetch_quotes
+        symbols = config.NIFTY_50_SYMBOLS
+    else:
+        from marketpulse.data.us import fetch_ohlcv_history, fetch_quotes
+        symbols = config.SP100_SYMBOLS
+
+    slug = tier_label.replace(" ", "_").lower()
+    session_key = f"tier_buy_{market}_{slug}"
+
+    signals = []
+    with st.spinner(f"Fetching BUY signals for {tier_label}…"):
+        try:
+            quotes = fetch_quotes(symbols)
+        except DataProviderError as e:
+            st.session_state[session_key] = []
+            st.error(f"⚠️ Could not fetch quotes: {e}")
+            return
+
+        articles = []
+        try:
+            articles = fetch_market_articles(market)
+        except Exception:
+            pass
+
+        for quote in quotes:
+            try:
+                ohlcv, mc = fetch_ohlcv_history(quote.symbol)
+                if ohlcv is None:
+                    continue
+                market_cap = mc if market == "IN" else quote.market_cap
+                if classify_cap_tier(market_cap, market) != tier_label:
+                    continue
+                technical = compute_indicators(quote.symbol, market, ohlcv)
+                if technical is None:
+                    continue
+                sentiment = score_articles_for_stock(articles, quote.symbol, quote.company_name)
+                sentiment.market = market
+                signal = generate_signal(technical, sentiment)
+                signal.cap_tier = tier_label
+                signals.append(signal)
+            except Exception:
+                continue
+
+    top = _top_buy_signals(signals, limit=20)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "symbol": s.symbol,
+            "market": s.market,
+            "signal_type": s.signal_type,
+            "confidence_score": s.confidence_score,
+            "technical_score": s.technical_score,
+            "sentiment_score": s.sentiment_score,
+            "contributing_factors": s.contributing_factors,
+            "generated_at": now_iso,
+            "cap_tier": s.cap_tier,
+            "current_price": next((q.current_price for q in quotes if q.symbol == s.symbol), None),
+            "last_updated": now_iso,
+        }
+        for s in top
+    ]
+    st.session_state[session_key] = rows
+    st.session_state.pop(f"_prev_rows_{market}_{slug}_buy", None)
 
 
 def _render_market_tab(market: str) -> None:
@@ -180,6 +247,7 @@ def _render_market_tab(market: str) -> None:
     tier_tabs = st.tabs(tier_labels)
     for tier_label, tier_tab in zip(tier_labels, tier_tabs):
         tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+        slug = tier_label.replace(" ", "_").lower()
         with tier_tab:
             tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
             with tab_all:
@@ -187,9 +255,20 @@ def _render_market_tab(market: str) -> None:
                 if sym:
                     st.session_state[f"selected_{market}"] = sym
             with tab_buy:
-                sym = render_stock_list(tier_rows, market, filter_signal="BUY", key_prefix=tier_label)
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
+                if st.button("🔄 Refresh BUY", key=f"btn_tier_buy_{market}_{slug}"):
+                    _refresh_tier_buy(market, tier_label)
+                tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
+                if tier_buy_rows is None:
+                    buy_data = tier_rows
+                elif len(tier_buy_rows) == 0:
+                    st.caption("No BUY signals found for this tier. Click 🔄 Refresh BUY above.")
+                    buy_data = None
+                else:
+                    buy_data = tier_buy_rows
+                if buy_data is not None:
+                    sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
             with tab_sell:
                 sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
                 if sym:
