@@ -231,17 +231,16 @@ def _render_market_tab(market: str) -> None:
     signal_rows = cache.read_signals(market)
     tier_labels = INDIA_TIER_ORDER if market == "IN" else US_TIER_ORDER
 
-    list_col, detail_col = st.columns([3, 2], gap="large")
+    tier_tabs = st.tabs(tier_labels)
+    for tier_tab, tier_label in zip(tier_tabs, tier_labels):
+        with tier_tab:
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+            slug = tier_label.replace(" ", "_").lower()
+            fetching_key = f"fetching_{market}_{slug}"
+            fetching = st.session_state.get(fetching_key, False)
 
-    with list_col:
-        tier_tabs = st.tabs(tier_labels)
-        for tier_tab, tier_label in zip(tier_tabs, tier_labels):
-            with tier_tab:
-                tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
-                slug = tier_label.replace(" ", "_").lower()
-                fetching_key = f"fetching_{market}_{slug}"
-                fetching = st.session_state.get(fetching_key, False)
-
+            with list_col:
                 # Signal filter + refresh row
                 seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
                 with seg_col:
@@ -298,15 +297,15 @@ def _render_market_tab(market: str) -> None:
                     if sym:
                         st.session_state[f"selected_{market}"] = sym
 
-    with detail_col:
-        selected_symbol = st.session_state.get(f"selected_{market}")
-        if selected_symbol:
-            technical = cache.read_technical(selected_symbol, market)
-            news_items = cache.read_news(selected_symbol, market)
-            ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-            render_stock_detail(selected_symbol, market, technical, news_items, ohlcv)
-        else:
-            st.caption("← Select a stock from the list to view details")
+            with detail_col:
+                selected_symbol = st.session_state.get(f"selected_{market}")
+                if selected_symbol:
+                    technical = cache.read_technical(selected_symbol, market)
+                    news_items = cache.read_news(selected_symbol, market)
+                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv)
+                else:
+                    st.caption("← Select a stock from the list to view details")
 
 
 def _news_items_from_sentiment(sentiment) -> list:
