@@ -13,11 +13,12 @@ def render_stock_detail(
     technical: dict | None,
     news_items: list[dict],
     ohlcv_df: pd.DataFrame | None = None,
+    key: str = "",
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
     st.markdown(f"#### 📊 {symbol}")
     if ohlcv_df is not None and not ohlcv_df.empty:
-        _render_price_chart(symbol, ohlcv_df)
+        _render_price_chart(symbol, ohlcv_df, key=key)
     else:
         st.info("No price chart available.")
 
@@ -29,7 +30,7 @@ def render_stock_detail(
     _render_news(news_items)
 
 
-def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
+def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame, key: str = "") -> None:
     df = ohlcv_df.tail(90).copy()
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -46,7 +47,7 @@ def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
         height=300,
         margin=dict(l=0, r=0, t=40, b=0),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"price_{symbol}_{key}")
 
 
 def _render_indicators(technical: dict) -> None:

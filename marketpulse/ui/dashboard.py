@@ -314,7 +314,7 @@ def _render_market_tab(market: str) -> None:
                     technical = cache.read_technical(selected_symbol, market)
                     news_items = cache.read_news(selected_symbol, market)
                     ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=slug)
                 else:
                     st.caption("← Select a stock from the list to view details")
 
