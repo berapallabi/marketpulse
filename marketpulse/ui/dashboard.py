@@ -142,7 +142,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         symbols = config.SP100_SYMBOLS
 
     slug = tier_label.replace(" ", "_").lower()
-    session_key = f"tier_buy_{market}_{slug}"
+    session_key = f"tier_buy_{market}_buy_{slug}"
 
     signals = []
     try:
@@ -206,7 +206,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         for s in top
     ]
     st.session_state[session_key] = rows
-    st.session_state.pop(f"_prev_rows_{market}_{slug}_buy", None)
+    st.session_state.pop(f"_prev_rows_{market}_buy_{slug}_buy", None)
 
 
 def _rows_last_at(rows: list[dict]) -> str | None:
@@ -243,90 +243,140 @@ def _render_market_tab(market: str) -> None:
     signal_rows = cache.read_signals(market)
     tier_labels = INDIA_TIER_ORDER if market == "IN" else US_TIER_ORDER
 
-    tier_tabs = st.tabs(tier_labels)
-    for tier_tab, tier_label in zip(tier_tabs, tier_labels):
-        with tier_tab:
-            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+    buy_tab, watchlist_tab, holdings_tab = st.tabs(["Buy", "Watchlist", "My Holdings"])
+
+    with buy_tab:
+        signal_slug = "buy"
+
+        # Tier selector + refresh button side-by-side, confined to left 60%
+        filter_col, _ = st.columns([3, 2], gap="large")
+        with filter_col:
+            seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
+            with seg_col:
+                tier_label = st.segmented_control(
+                    "Tier",
+                    options=tier_labels,
+                    default=tier_labels[0],
+                    label_visibility="collapsed",
+                    key=f"tier_{market}_{signal_slug}",
+                ) or tier_labels[0]
             slug = tier_label.replace(" ", "_").lower()
-            fetching_key = f"fetching_{market}_{slug}"
+            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+            fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
             fetching = st.session_state.get(fetching_key, False)
-
-            # Signal filter + refresh confined to left 60% — right side left empty
-            filter_col, _ = st.columns([3, 2], gap="large")
-            with filter_col:
-                seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
-                with seg_col:
-                    signal_choice = st.segmented_control(
-                        "Signal",
-                        options=["Buy", "Watchlist", "My Holdings"],
-                        default="Buy",
-                        label_visibility="collapsed",
-                        key=f"signal_{market}_{slug}",
+            with btn_col:
+                rows_for_ts = st.session_state.get(f"tier_buy_{market}_{signal_slug}_{slug}") or tier_rows
+                last_at = _rows_last_at(rows_for_ts)
+                if fetching:
+                    st.button(
+                        "⏳  Fetching latest details…",
+                        key=f"btn_tier_buy_{market}_{signal_slug}_{slug}",
+                        use_container_width=True,
+                        type="secondary",
+                        disabled=True,
                     )
-                with btn_col:
-                    rows_for_ts = st.session_state.get(f"tier_buy_{market}_{slug}") or tier_rows
-                    last_at = _rows_last_at(rows_for_ts)
-                    if fetching:
-                        st.button(
-                            "⏳  Fetching latest details…",
-                            key=f"btn_tier_buy_{market}_{slug}",
-                            use_container_width=True,
-                            type="secondary",
-                            disabled=True,
-                        )
-                        _refresh_tier_buy(market, tier_label)
-                        st.session_state[fetching_key] = False
-                        st.rerun()
-                    else:
-                        label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
-                        if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
-                            st.session_state[fetching_key] = True
-                            st.rerun()
-
-            # Table | detail — second row, aligns detail panel with the table
-            list_col, detail_col = st.columns([3, 2], gap="large")
-            with list_col:
-                if signal_choice == "Buy" or signal_choice is None:
-                    tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
-                    if tier_buy_rows is None:
-                        buy_data = tier_rows
-                    elif len(tier_buy_rows) == 0:
-                        st.caption("No BUY signals found for this tier.")
-                        buy_data = None
-                    else:
-                        buy_data = tier_buy_rows
-                    if buy_data is not None:
-                        sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
-                        if sym:
-                            st.session_state[f"selected_{market}"] = sym
-                elif signal_choice == "Watchlist":
-                    watchlist_symbols = set(cache.read_watchlist(market))
-                    watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
-                    if watchlist_rows:
-                        sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=tier_label)
-                        if sym:
-                            st.session_state[f"selected_{market}"] = sym
-                    else:
-                        st.caption("No stocks in your watchlist yet.")
-                elif signal_choice == "My Holdings":
-                    holdings_symbols = set(cache.read_holdings(market))
-                    holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
-                    if holdings_rows:
-                        sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=tier_label)
-                        if sym:
-                            st.session_state[f"selected_{market}"] = sym
-                    else:
-                        st.caption("No holdings added yet.")
-
-            with detail_col:
-                selected_symbol = st.session_state.get(f"selected_{market}")
-                if selected_symbol:
-                    technical = cache.read_technical(selected_symbol, market)
-                    news_items = cache.read_news(selected_symbol, market)
-                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=slug)
+                    _refresh_tier_buy(market, tier_label)
+                    st.session_state[fetching_key] = False
+                    st.rerun()
                 else:
-                    st.caption("← Select a stock from the list to view details")
+                    label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
+                    if st.button(label, key=f"btn_tier_buy_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                        st.session_state[fetching_key] = True
+                        st.rerun()
+
+        list_col, detail_col = st.columns([3, 2], gap="large")
+        with list_col:
+            tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{signal_slug}_{slug}")
+            if tier_buy_rows is None:
+                buy_data = tier_rows
+            elif len(tier_buy_rows) == 0:
+                st.caption("No BUY signals found for this tier.")
+                buy_data = None
+            else:
+                buy_data = tier_buy_rows
+            if buy_data is not None:
+                sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=f"{signal_slug}_{tier_label}")
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+        with detail_col:
+            selected_symbol = st.session_state.get(f"selected_{market}")
+            if selected_symbol:
+                technical = cache.read_technical(selected_symbol, market)
+                news_items = cache.read_news(selected_symbol, market)
+                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+            else:
+                st.caption("← Select a stock from the list to view details")
+
+    with watchlist_tab:
+        signal_slug = "watchlist"
+
+        filter_col, _ = st.columns([3, 2], gap="large")
+        with filter_col:
+            tier_label = st.segmented_control(
+                "Tier",
+                options=tier_labels,
+                default=tier_labels[0],
+                label_visibility="collapsed",
+                key=f"tier_{market}_{signal_slug}",
+            ) or tier_labels[0]
+        slug = tier_label.replace(" ", "_").lower()
+        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+
+        list_col, detail_col = st.columns([3, 2], gap="large")
+        with list_col:
+            watchlist_symbols = set(cache.read_watchlist(market))
+            watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
+            if watchlist_rows:
+                sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+            else:
+                st.caption("No stocks in your watchlist yet.")
+        with detail_col:
+            selected_symbol = st.session_state.get(f"selected_{market}")
+            if selected_symbol:
+                technical = cache.read_technical(selected_symbol, market)
+                news_items = cache.read_news(selected_symbol, market)
+                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+            else:
+                st.caption("← Select a stock from the list to view details")
+
+    with holdings_tab:
+        signal_slug = "my_holdings"
+
+        filter_col, _ = st.columns([3, 2], gap="large")
+        with filter_col:
+            tier_label = st.segmented_control(
+                "Tier",
+                options=tier_labels,
+                default=tier_labels[0],
+                label_visibility="collapsed",
+                key=f"tier_{market}_{signal_slug}",
+            ) or tier_labels[0]
+        slug = tier_label.replace(" ", "_").lower()
+        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+
+        list_col, detail_col = st.columns([3, 2], gap="large")
+        with list_col:
+            holdings_symbols = set(cache.read_holdings(market))
+            holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
+            if holdings_rows:
+                sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                if sym:
+                    st.session_state[f"selected_{market}"] = sym
+            else:
+                st.caption("No holdings added yet.")
+        with detail_col:
+            selected_symbol = st.session_state.get(f"selected_{market}")
+            if selected_symbol:
+                technical = cache.read_technical(selected_symbol, market)
+                news_items = cache.read_news(selected_symbol, market)
+                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+            else:
+                st.caption("← Select a stock from the list to view details")
 
 
 def _news_items_from_sentiment(sentiment) -> list:

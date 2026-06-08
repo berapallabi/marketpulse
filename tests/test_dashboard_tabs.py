@@ -71,7 +71,8 @@ class TestTabOptions:
         import marketpulse.ui.dashboard as dashboard
         import inspect
         src = inspect.getsource(dashboard._render_market_tab)
-        assert 'default="Buy"' in src or "default='Buy'" in src
+        # Buy is the first tab in st.tabs(), making it the default selection
+        assert 'st.tabs(["Buy", "Watchlist", "My Holdings"])' in src
 
 
 # ── US1: Buy tab regression ────────────────────────────────────────────────────
