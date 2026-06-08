@@ -4,12 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from marketpulse.config import STALE_HOURS
-
-_SIGNAL_COLOURS = {
-    "BUY": "#22c55e",
-    "SELL": "#ef4444",
-    "HOLD": "#f59e0b",
-}
+from marketpulse.ui.theme import signal_cell_style
 
 
 def render_stock_list(
@@ -19,17 +14,15 @@ def render_stock_list(
     key_prefix: str = "",
 ) -> str | None:
     """Render filtered, colour-coded signal table. Returns selected symbol on new click, else None."""
-    st.caption("⚠️ Informational only — not financial advice.")
-
     if not signal_rows:
-        st.info("Click 🔄 Refresh to load data.")
+        st.caption("No data loaded yet. Click 🔄 Refresh BUY to fetch signals.")
         return None
 
     df = _build_df(signal_rows)
     filtered = df if filter_signal == "ALL" else df[df["Signal"] == filter_signal]
 
     if filtered.empty:
-        st.caption("No stocks match the selected filter.")
+        st.info(f"No {filter_signal} signals in this tier.")
         return None
 
     filtered = filtered.sort_values("Confidence", ascending=False).reset_index(drop=True)
@@ -69,9 +62,9 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
         stale = _is_stale(r.get("last_updated") or r.get("generated_at"), now)
         staleness_label = " ⚠️" if stale else ""
         records.append({
-            "Symbol": r["symbol"],
             "Signal": r["signal_type"],
             "Confidence": int(r["confidence_score"]),
+            "Symbol": r["symbol"],
             "Price": _fmt_price(r.get("current_price"), r.get("market", "")),
             "Updated": _fmt_time(r.get("last_updated") or r.get("generated_at")) + staleness_label,
         })
@@ -79,9 +72,8 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
 
 
 def _colour_signal_col(row):
-    colour = _SIGNAL_COLOURS.get(row.get("Signal", ""), "#ffffff")
     return [
-        f"color: {colour}; font-weight: bold" if col == "Signal" else ""
+        signal_cell_style(row.get("Signal", "")) if col == "Signal" else ""
         for col in row.index
     ]
 

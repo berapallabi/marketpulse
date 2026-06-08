@@ -1,12 +1,6 @@
 import streamlit as st
 
 
-_COLOURS = {
-    "Bullish": "normal",
-    "Neutral": "off",
-    "Bearish": "inverse",
-}
-
 _ICONS = {
     "Bullish": "📈",
     "Bearish": "📉",

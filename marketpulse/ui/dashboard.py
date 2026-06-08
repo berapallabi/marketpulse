@@ -19,34 +19,6 @@ def _is_market_closed(market: str) -> bool:
         return not (14.5 <= hour_utc <= 21.0)
 
 
-_TAB_CSS = """
-<style>
-/* Tab strip background */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
-    background-color: #f0f2f6;
-    padding: 6px 6px 0 6px;
-    border-radius: 8px 8px 0 0;
-}
-/* Inactive tab */
-.stTabs [data-baseweb="tab"] {
-    padding: 10px 24px;
-    border-radius: 6px 6px 0 0;
-    font-size: 14px;
-    font-weight: 500;
-    color: #555;
-    background-color: #e2e5ea;
-}
-/* Active tab */
-.stTabs [data-baseweb="tab"][aria-selected="true"] {
-    background-color: #ffffff;
-    color: #0f1117;
-    font-weight: 700;
-    border-bottom: 3px solid #ff4b4b;
-}
-</style>
-"""
-
 
 def _top_buy_signals(signals: list, limit: int = 20) -> list:
     buys = [s for s in signals if s.signal_type == "BUY"]
@@ -54,8 +26,9 @@ def _top_buy_signals(signals: list, limit: int = 20) -> list:
 
 
 def render_dashboard() -> None:
+    from marketpulse.ui.theme import inject_global_css
     st.set_page_config(page_title="MarketPulse", page_icon="📈", layout="wide")
-    st.markdown(_TAB_CSS, unsafe_allow_html=True)
+    inject_global_css()
     st.title("📈 MarketPulse Investment Dashboard")
     st.caption("⚠️ Informational only — not financial advice. Signals are generated algorithmically.")
 
@@ -236,7 +209,7 @@ def _render_market_tab(market: str) -> None:
         st.error(f"⚠️ Data unavailable — {error}")
 
     if _is_market_closed(market):
-        st.info("🔴 Market Closed — showing last-close data")
+        st.caption("🔴 Market closed · last-close data")
 
     summary = cache.read_market_summary(market)
     render_sentiment_gauge(summary, "🇮🇳 Market Sentiment" if market == "IN" else "🇺🇸 Market Sentiment")

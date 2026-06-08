@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from marketpulse.ui.theme import PALETTE
+
 
 def render_stock_detail(
     symbol: str,
@@ -14,8 +16,6 @@ def render_stock_detail(
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
     with st.expander(f"📊 {symbol} — Detail View", expanded=True):
-        st.caption("⚠️ Informational only — not financial advice.")
-
         if ohlcv_df is not None and not ohlcv_df.empty:
             _render_price_chart(symbol, ohlcv_df)
         else:
@@ -37,7 +37,7 @@ def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
         y=df["Close"],
         mode="lines",
         name="Close",
-        line=dict(color="#3b82f6", width=2),
+        line=dict(color=PALETTE["INTERACTIVE"], width=2),
     ))
     fig.update_layout(
         title=f"{symbol} — 90-Day Close Price",
@@ -56,7 +56,7 @@ def _render_indicators(technical: dict) -> None:
     rsi = technical.get("rsi_14")
     with col1:
         if rsi is not None:
-            label = "🔴 Overbought" if rsi > 70 else ("🟢 Oversold" if rsi < 30 else "⚪ Neutral")
+            label = "Overbought" if rsi > 70 else ("Oversold" if rsi < 30 else "Neutral")
             st.metric("RSI (14)", f"{rsi:.1f}", delta=label)
         else:
             st.metric("RSI (14)", "N/A")
@@ -79,7 +79,7 @@ def _render_indicators(technical: dict) -> None:
         sma50 = technical.get("sma_50")
         sma200 = technical.get("sma_200")
         if sma50 is not None and sma200 is not None:
-            cross = "🟢 Golden" if sma50 > sma200 else "🔴 Death"
+            cross = "Golden Cross" if sma50 > sma200 else "Death Cross"
             st.metric("SMA 50 / 200", f"{sma50:.2f} / {sma200:.2f}", delta=f"{cross} Cross")
         else:
             st.metric("SMA 50 / 200", "N/A")
