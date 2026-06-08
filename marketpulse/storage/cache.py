@@ -109,6 +109,20 @@ def init_db(db_path: Path | None = None) -> None:
                 hold_count        INTEGER NOT NULL,
                 last_updated      TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS watchlist (
+                symbol   TEXT NOT NULL,
+                market   TEXT NOT NULL CHECK (market IN ('IN', 'US')),
+                added_at TEXT NOT NULL,
+                PRIMARY KEY (symbol, market)
+            );
+
+            CREATE TABLE IF NOT EXISTS holdings (
+                symbol   TEXT NOT NULL,
+                market   TEXT NOT NULL CHECK (market IN ('IN', 'US')),
+                added_at TEXT NOT NULL,
+                PRIMARY KEY (symbol, market)
+            );
         """)
         conn.commit()
         try:
@@ -323,3 +337,87 @@ def check_staleness(market: str, db_path: Path | None = None) -> bool:
         return (now - last).total_seconds() > STALE_HOURS * 3600
     except (ValueError, KeyError):
         return True
+
+
+# ── Watchlist ─────────────────────────────────────────────────────────────────
+
+def add_to_watchlist(symbol: str, market: str, db_path: Path | None = None) -> None:
+    path = db_path or DB_PATH
+    conn = sqlite3.connect(path)
+    try:
+        _upsert(conn, "watchlist", ["symbol", "market"], {
+            "symbol": symbol, "market": market,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+        })
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def remove_from_watchlist(symbol: str, market: str, db_path: Path | None = None) -> None:
+    path = db_path or DB_PATH
+    if not path.exists():
+        return
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("DELETE FROM watchlist WHERE symbol = ? AND market = ?", (symbol, market))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_watchlist(market: str, db_path: Path | None = None) -> list[str]:
+    path = db_path or DB_PATH
+    if not path.exists():
+        return []
+    conn = sqlite3.connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT symbol FROM watchlist WHERE market = ? ORDER BY added_at",
+            (market,),
+        ).fetchall()
+        return [r[0] for r in rows]
+    finally:
+        conn.close()
+
+
+# ── Holdings ──────────────────────────────────────────────────────────────────
+
+def add_to_holdings(symbol: str, market: str, db_path: Path | None = None) -> None:
+    path = db_path or DB_PATH
+    conn = sqlite3.connect(path)
+    try:
+        _upsert(conn, "holdings", ["symbol", "market"], {
+            "symbol": symbol, "market": market,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+        })
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def remove_from_holdings(symbol: str, market: str, db_path: Path | None = None) -> None:
+    path = db_path or DB_PATH
+    if not path.exists():
+        return
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("DELETE FROM holdings WHERE symbol = ? AND market = ?", (symbol, market))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_holdings(market: str, db_path: Path | None = None) -> list[str]:
+    path = db_path or DB_PATH
+    if not path.exists():
+        return []
+    conn = sqlite3.connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT symbol FROM holdings WHERE market = ? ORDER BY added_at",
+            (market,),
+        ).fetchall()
+        return [r[0] for r in rows]
+    finally:
+        conn.close()
