@@ -1,9 +1,6 @@
-from datetime import datetime, timezone
-
 import pandas as pd
 import streamlit as st
 
-from marketpulse.config import STALE_HOURS
 from marketpulse.ui.theme import signal_cell_style
 
 
@@ -57,16 +54,12 @@ def render_stock_list(
 
 def _build_df(rows: list[dict]) -> pd.DataFrame:
     records = []
-    now = datetime.now(timezone.utc)
     for r in rows:
-        stale = _is_stale(r.get("last_updated") or r.get("generated_at"), now)
-        staleness_label = " ⚠️" if stale else ""
         records.append({
             "Signal": r["signal_type"],
             "Confidence": int(r["confidence_score"]),
             "Symbol": r["symbol"],
             "Price": _fmt_price(r.get("current_price"), r.get("market", "")),
-            "Updated": _fmt_time(r.get("last_updated") or r.get("generated_at")) + staleness_label,
         })
     return pd.DataFrame(records)
 
@@ -78,28 +71,8 @@ def _colour_signal_col(row):
     ]
 
 
-def _is_stale(ts_str: str | None, now: datetime) -> bool:
-    if not ts_str:
-        return True
-    try:
-        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        return (now - ts).total_seconds() > STALE_HOURS * 3600
-    except ValueError:
-        return True
-
-
 def _fmt_price(price: float | None, market: str) -> str:
     if price is None:
         return "—"
     symbol = "₹" if market == "IN" else "$"
     return f"{symbol}{price:,.2f}"
-
-
-def _fmt_time(ts_str: str | None) -> str:
-    if not ts_str:
-        return "—"
-    try:
-        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        return ts.strftime("%H:%M UTC")
-    except ValueError:
-        return ts_str[:16]
