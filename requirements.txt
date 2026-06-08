@@ -1,0 +1,11 @@
+streamlit>=1.35
+plotly>=5.20
+yfinance>=0.2
+nsepython>=2.9
+nsetools>=1.0.11
+ta>=0.10
+feedparser>=6.0
+vaderSentiment>=3.3
+pandas>=2.1
+numpy>=1.26
+pytest>=8.0

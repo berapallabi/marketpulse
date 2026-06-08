@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.env
+*.db
+# Cache database is stored at ~/.marketpulse/cache.db — outside this repo
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
