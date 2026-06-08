@@ -34,7 +34,9 @@ def render_dashboard() -> None:
 
     cache.init_db()
 
-    tab_in, tab_us = st.tabs(["🇮🇳 India (Nifty 50)", "🇺🇸 US (S&P 100)"])
+    in_dot  = "🔴" if _is_market_closed("IN") else "🟢"
+    us_dot  = "🔴" if _is_market_closed("US") else "🟢"
+    tab_in, tab_us = st.tabs([f"🇮🇳 India (Nifty 50) {in_dot}", f"🇺🇸 US (S&P 100) {us_dot}"])
 
     with tab_in:
         _render_market_tab("IN")
@@ -207,9 +209,6 @@ def _render_market_tab(market: str) -> None:
     error = st.session_state.get(f"error_{market}")
     if error:
         st.error(f"⚠️ Data unavailable — {error}")
-
-    if _is_market_closed(market):
-        st.caption("🔴 Market closed · last-close data")
 
     summary = cache.read_market_summary(market)
     render_sentiment_gauge(summary, "🇮🇳 Market Sentiment" if market == "IN" else "🇺🇸 Market Sentiment")

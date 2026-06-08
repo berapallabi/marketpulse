@@ -30,7 +30,7 @@ def get_global_css() -> str:
     """Return the full CSS string for injection into the Streamlit page."""
     p = PALETTE
     return f"""
-/* ── Tab strip ── */
+/* ── Level 1: Market tabs (India / US) ── */
 .stTabs [data-baseweb="tab-list"] {{
     gap: 6px;
     background-color: {p['NEUTRAL_LIGHT']};
@@ -51,6 +51,57 @@ def get_global_css() -> str:
     color: {p['PRIMARY']};
     font-weight: 700;
     border-bottom: 3px solid {p['NEUTRAL_DARK']};
+}}
+
+/* ── Level 2: Tier tabs (Large / Mid / Small Cap) ── */
+.stTabs .stTabs [data-baseweb="tab-list"] {{
+    gap: 2px;
+    background-color: {p['NEUTRAL_LIGHT']};
+    padding: 4px 4px 0 4px;
+    border-radius: 6px 6px 0 0;
+    width: fit-content;
+    margin-top: 12px;
+}}
+.stTabs .stTabs [data-baseweb="tab"] {{
+    padding: 7px 18px;
+    border-radius: 4px 4px 0 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: {p['NEUTRAL_DARK']};
+    background-color: {p['NEUTRAL_MID']};
+}}
+.stTabs .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+    background-color: {p['NEUTRAL_LIGHT']};
+    color: {p['PRIMARY']};
+    font-weight: 600;
+    border-bottom: 2px solid {p['NEUTRAL_DARK']};
+}}
+
+/* ── Level 3: Signal tabs (All / BUY / SELL / HOLD) ── */
+.stTabs .stTabs .stTabs [data-baseweb="tab-list"] {{
+    gap: 0;
+    background-color: transparent;
+    border-bottom: 1px solid {p['NEUTRAL_MID']};
+    padding: 0;
+    border-radius: 0;
+    width: fit-content;
+    margin-top: 8px;
+}}
+.stTabs .stTabs .stTabs [data-baseweb="tab"] {{
+    padding: 5px 16px;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: {p['NEUTRAL_DARK']};
+    background-color: transparent;
+    opacity: 0.65;
+}}
+.stTabs .stTabs .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+    background-color: transparent;
+    color: {p['PRIMARY']};
+    font-weight: 600;
+    border-bottom: 2px solid {p['PRIMARY']};
+    opacity: 1;
 }}
 
 /* ── Typography scale ── */
