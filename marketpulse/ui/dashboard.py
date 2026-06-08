@@ -216,47 +216,52 @@ def _render_market_tab(market: str) -> None:
     signal_rows = cache.read_signals(market)
     tier_labels = INDIA_TIER_ORDER if market == "IN" else US_TIER_ORDER
 
-    tier_tabs = st.tabs(tier_labels)
-    for tier_label, tier_tab in zip(tier_labels, tier_tabs):
-        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
-        slug = tier_label.replace(" ", "_").lower()
-        with tier_tab:
-            tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
-            with tab_all:
-                sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
-            with tab_buy:
-                if st.button("🔄 Refresh BUY", key=f"btn_tier_buy_{market}_{slug}"):
-                    _refresh_tier_buy(market, tier_label)
-                tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
-                if tier_buy_rows is None:
-                    buy_data = tier_rows
-                elif len(tier_buy_rows) == 0:
-                    st.caption("No BUY signals found for this tier. Click 🔄 Refresh BUY above.")
-                    buy_data = None
-                else:
-                    buy_data = tier_buy_rows
-                if buy_data is not None:
-                    sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
+    list_col, detail_col = st.columns([3, 2], gap="large")
+
+    with list_col:
+        tier_tabs = st.tabs(tier_labels)
+        for tier_label, tier_tab in zip(tier_labels, tier_tabs):
+            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+            slug = tier_label.replace(" ", "_").lower()
+            with tier_tab:
+                tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
+                with tab_all:
+                    sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
                     if sym:
                         st.session_state[f"selected_{market}"] = sym
-            with tab_sell:
-                sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
-            with tab_hold:
-                sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
+                with tab_buy:
+                    if st.button("🔄 Refresh BUY", key=f"btn_tier_buy_{market}_{slug}"):
+                        _refresh_tier_buy(market, tier_label)
+                    tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
+                    if tier_buy_rows is None:
+                        buy_data = tier_rows
+                    elif len(tier_buy_rows) == 0:
+                        st.caption("No BUY signals found for this tier. Click 🔄 Refresh BUY above.")
+                        buy_data = None
+                    else:
+                        buy_data = tier_buy_rows
+                    if buy_data is not None:
+                        sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
+                        if sym:
+                            st.session_state[f"selected_{market}"] = sym
+                with tab_sell:
+                    sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
+                with tab_hold:
+                    sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
 
-    # Drill-down — persists across sub-tab switches; cleared on refresh
-    selected_symbol = st.session_state.get(f"selected_{market}")
-    if selected_symbol:
-        technical = cache.read_technical(selected_symbol, market)
-        news_items = cache.read_news(selected_symbol, market)
-        ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-        render_stock_detail(selected_symbol, market, technical, news_items, ohlcv)
+    with detail_col:
+        selected_symbol = st.session_state.get(f"selected_{market}")
+        if selected_symbol:
+            technical = cache.read_technical(selected_symbol, market)
+            news_items = cache.read_news(selected_symbol, market)
+            ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+            render_stock_detail(selected_symbol, market, technical, news_items, ohlcv)
+        else:
+            st.caption("← Select a stock from the list to view details")
 
 
 def _news_items_from_sentiment(sentiment) -> list:

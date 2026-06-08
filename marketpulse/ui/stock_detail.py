@@ -15,18 +15,18 @@ def render_stock_detail(
     ohlcv_df: pd.DataFrame | None = None,
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
-    with st.expander(f"📊 {symbol} — Detail View", expanded=True):
-        if ohlcv_df is not None and not ohlcv_df.empty:
-            _render_price_chart(symbol, ohlcv_df)
-        else:
-            st.info("No price chart available.")
+    st.markdown(f"#### 📊 {symbol}")
+    if ohlcv_df is not None and not ohlcv_df.empty:
+        _render_price_chart(symbol, ohlcv_df)
+    else:
+        st.info("No price chart available.")
 
-        if technical:
-            _render_indicators(technical)
-        else:
-            st.info("No technical indicator data available.")
+    if technical:
+        _render_indicators(technical)
+    else:
+        st.info("No technical indicator data available.")
 
-        _render_news(news_items)
+    _render_news(news_items)
 
 
 def _render_price_chart(symbol: str, ohlcv_df: pd.DataFrame) -> None:
