@@ -146,7 +146,7 @@ def _render_news(news_items: list[dict]) -> None:
                 from datetime import datetime, timedelta, timezone
                 IST = timezone(timedelta(hours=5, minutes=30))
                 ts = datetime.fromisoformat(published.replace("Z", "+00:00")).astimezone(IST)
-                published = ts.strftime("%d %b %Y %H:%M IST")
+                published = ts.strftime("%d %b %Y %I:%M %p IST")
             except ValueError:
                 pass
         st.markdown(

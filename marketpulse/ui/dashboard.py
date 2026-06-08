@@ -222,7 +222,7 @@ def _rows_last_at(rows: list[dict]) -> str | None:
         return None
     try:
         ts = datetime.fromisoformat(best.replace("Z", "+00:00")).astimezone(IST)
-        return ts.strftime("%H:%M IST")
+        return ts.strftime("%I:%M %p IST")
     except (ValueError, AttributeError):
         return None
 
