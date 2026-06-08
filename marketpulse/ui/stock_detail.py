@@ -143,9 +143,10 @@ def _render_news(news_items: list[dict]) -> None:
         published = item.get("published_at") or "Date unknown"
         if published and published != "Date unknown":
             try:
-                from datetime import datetime, timezone
-                ts = datetime.fromisoformat(published.replace("Z", "+00:00"))
-                published = ts.strftime("%d %b %Y %H:%M UTC")
+                from datetime import datetime, timedelta, timezone
+                IST = timezone(timedelta(hours=5, minutes=30))
+                ts = datetime.fromisoformat(published.replace("Z", "+00:00")).astimezone(IST)
+                published = ts.strftime("%d %b %Y %H:%M IST")
             except ValueError:
                 pass
         st.markdown(

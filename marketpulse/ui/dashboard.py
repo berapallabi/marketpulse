@@ -210,7 +210,9 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
 
 
 def _rows_last_at(rows: list[dict]) -> str | None:
-    """Return the most recent last_updated/generated_at from a list of signal rows, formatted as HH:MM UTC."""
+    """Return the most recent last_updated/generated_at from a list of signal rows, formatted as HH:MM IST."""
+    from datetime import timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
     best: str | None = None
     for r in rows:
         ts_str = r.get("last_updated") or r.get("generated_at")
@@ -219,8 +221,8 @@ def _rows_last_at(rows: list[dict]) -> str | None:
     if best is None:
         return None
     try:
-        ts = datetime.fromisoformat(best.replace("Z", "+00:00"))
-        return ts.strftime("%H:%M UTC")
+        ts = datetime.fromisoformat(best.replace("Z", "+00:00")).astimezone(IST)
+        return ts.strftime("%H:%M IST")
     except (ValueError, AttributeError):
         return None
 
