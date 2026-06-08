@@ -30,6 +30,11 @@ def get_global_css() -> str:
     """Return the full CSS string for injection into the Streamlit page."""
     p = PALETTE
     return f"""
+/* ── Hide full-width tab divider ── */
+.stTabs [data-baseweb="tab-border"] {{
+    display: none;
+}}
+
 /* ── Level 1: Market tabs (India / US) ── */
 .stTabs [data-baseweb="tab-list"] {{
     gap: 6px;
