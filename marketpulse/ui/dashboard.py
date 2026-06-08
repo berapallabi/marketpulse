@@ -196,8 +196,23 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         for s in top
     ]
     st.session_state[session_key] = rows
-    st.session_state[f"{session_key}_at"] = datetime.now(timezone.utc).strftime("%H:%M UTC")
     st.session_state.pop(f"_prev_rows_{market}_{slug}_buy", None)
+
+
+def _rows_last_at(rows: list[dict]) -> str | None:
+    """Return the most recent last_updated/generated_at from a list of signal rows, formatted as HH:MM UTC."""
+    best: str | None = None
+    for r in rows:
+        ts_str = r.get("last_updated") or r.get("generated_at")
+        if ts_str and (best is None or ts_str > best):
+            best = ts_str
+    if best is None:
+        return None
+    try:
+        ts = datetime.fromisoformat(best.replace("Z", "+00:00"))
+        return ts.strftime("%H:%M UTC")
+    except (ValueError, AttributeError):
+        return None
 
 
 def _render_market_tab(market: str) -> None:
@@ -244,7 +259,8 @@ def _render_market_tab(market: str) -> None:
                 key=f"signal_{market}_{slug}",
             )
         with btn_col:
-            last_at = st.session_state.get(f"tier_buy_{market}_{slug}_at")
+            rows_for_ts = st.session_state.get(f"tier_buy_{market}_{slug}") or tier_rows
+            last_at = _rows_last_at(rows_for_ts)
             label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
             if st.button(label, key=f"btn_tier_buy_{market}_{slug}", use_container_width=True, type="secondary"):
                 _refresh_tier_buy(market, tier_label)
