@@ -224,19 +224,29 @@ def _render_market_tab(market: str) -> None:
             tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
             slug = tier_label.replace(" ", "_").lower()
             with tier_tab:
-                tab_all, tab_buy, tab_sell, tab_hold = st.tabs(["All", "BUY", "SELL", "HOLD"])
-                with tab_all:
+                seg_col, btn_col = st.columns([6, 1])
+                with seg_col:
+                    signal_choice = st.segmented_control(
+                        "Signal",
+                        options=["All", "BUY", "SELL", "HOLD"],
+                        default="All",
+                        label_visibility="collapsed",
+                        key=f"signal_{market}_{slug}",
+                    )
+                with btn_col:
+                    if st.button("🔄", key=f"btn_tier_buy_{market}_{slug}", help="Refresh BUY signals"):
+                        _refresh_tier_buy(market, tier_label)
+
+                if signal_choice == "All" or signal_choice is None:
                     sym = render_stock_list(tier_rows, market, filter_signal="ALL", key_prefix=tier_label)
                     if sym:
                         st.session_state[f"selected_{market}"] = sym
-                with tab_buy:
-                    if st.button("🔄 Refresh BUY", key=f"btn_tier_buy_{market}_{slug}"):
-                        _refresh_tier_buy(market, tier_label)
+                elif signal_choice == "BUY":
                     tier_buy_rows = st.session_state.get(f"tier_buy_{market}_{slug}")
                     if tier_buy_rows is None:
                         buy_data = tier_rows
                     elif len(tier_buy_rows) == 0:
-                        st.caption("No BUY signals found for this tier. Click 🔄 Refresh BUY above.")
+                        st.caption("No BUY signals found for this tier.")
                         buy_data = None
                     else:
                         buy_data = tier_buy_rows
@@ -244,11 +254,11 @@ def _render_market_tab(market: str) -> None:
                         sym = render_stock_list(buy_data, market, filter_signal="BUY", key_prefix=tier_label)
                         if sym:
                             st.session_state[f"selected_{market}"] = sym
-                with tab_sell:
+                elif signal_choice == "SELL":
                     sym = render_stock_list(tier_rows, market, filter_signal="SELL", key_prefix=tier_label)
                     if sym:
                         st.session_state[f"selected_{market}"] = sym
-                with tab_hold:
+                elif signal_choice == "HOLD":
                     sym = render_stock_list(tier_rows, market, filter_signal="HOLD", key_prefix=tier_label)
                     if sym:
                         st.session_state[f"selected_{market}"] = sym

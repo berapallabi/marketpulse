@@ -82,32 +82,6 @@ def get_global_css() -> str:
     border-bottom: 2px solid {p['NEUTRAL_DARK']};
 }}
 
-/* ── Level 3: Signal tabs (All / BUY / SELL / HOLD) ── */
-.stTabs .stTabs .stTabs [data-baseweb="tab-list"] {{
-    gap: 0;
-    background-color: transparent;
-    border-bottom: 1px solid {p['NEUTRAL_MID']};
-    padding: 0;
-    border-radius: 0;
-    width: fit-content;
-    margin-top: 8px;
-}}
-.stTabs .stTabs .stTabs [data-baseweb="tab"] {{
-    padding: 5px 16px;
-    border-radius: 0;
-    font-size: 12px;
-    font-weight: 400;
-    color: {p['NEUTRAL_DARK']};
-    background-color: transparent;
-    opacity: 0.65;
-}}
-.stTabs .stTabs .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-    background-color: transparent;
-    color: {p['PRIMARY']};
-    font-weight: 600;
-    border-bottom: 2px solid {p['PRIMARY']};
-    opacity: 1;
-}}
 
 /* ── Page layout ── */
 .block-container {{
