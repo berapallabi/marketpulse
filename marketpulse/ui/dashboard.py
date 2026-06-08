@@ -158,6 +158,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
     except Exception:
         pass
 
+    ohlcv_cache: dict = st.session_state.setdefault(f"ohlcv_{market}", {})
     for quote in quotes:
         try:
             ohlcv, mc = fetch_ohlcv_history(quote.symbol)
@@ -174,8 +175,15 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
             signal = generate_signal(technical, sentiment)
             signal.cap_tier = tier_label
             signals.append(signal)
+            cache.write_technical(technical)
+            cache.write_sentiment(sentiment)
+            cache.write_news(quote.symbol, market, _news_items_from_sentiment(sentiment))
+            ohlcv_cache[quote.symbol] = ohlcv
         except Exception:
             continue
+
+    if signals:
+        cache.write_signals(signals)
 
     top = _top_buy_signals(signals, limit=20)
     now_iso = datetime.now(timezone.utc).isoformat()
