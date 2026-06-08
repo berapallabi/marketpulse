@@ -113,9 +113,8 @@ h2, h3 {{
 }}
 
 /* ── Tier row refresh button ── */
-.stTabs .stTabs [data-testid="baseButton-tertiary"] p {{
-    font-size: 0.8rem !important;
-    opacity: 0.7;
+.stTabs .stTabs [data-testid="baseButton-secondary"] p {{
+    font-size: 0.82rem !important;
 }}
 
 """
