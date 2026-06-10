@@ -145,6 +145,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
     session_key = f"tier_buy_{market}_buy_{slug}"
 
     signals = []
+    sentiments = []
     try:
         quotes = fetch_quotes(symbols)
     except DataProviderError as e:
@@ -177,6 +178,7 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
             signal = generate_signal(technical, sentiment)
             signal.cap_tier = tier_label
             signals.append(signal)
+            sentiments.append(sentiment)
             cache.write_technical(technical)
             cache.write_sentiment(sentiment)
             cache.write_news(quote.symbol, market, _news_items_from_sentiment(sentiment))
@@ -185,7 +187,33 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
             continue
 
     if signals:
+        from statistics import mean
+        from marketpulse.analysis.market_summary import MarketSummary
         cache.write_signals(signals)
+        # Count across ALL cached tiers so the gauge reflects the full market
+        all_rows = cache.read_signals(market)
+        buy_count = sum(1 for r in all_rows if r.get("signal_type") == "BUY")
+        sell_count = sum(1 for r in all_rows if r.get("signal_type") == "SELL")
+        hold_count = sum(1 for r in all_rows if r.get("signal_type") == "HOLD")
+        total = len(all_rows)
+        avg_score = round(mean(s.sentiment_score for s in sentiments), 1) if sentiments else 50.0
+        buy_ratio = buy_count / total if total > 0 else 0
+        sell_ratio = sell_count / total if total > 0 else 0
+        if buy_ratio >= 0.4:
+            overall = "Bullish"
+        elif sell_ratio >= 0.4:
+            overall = "Bearish"
+        else:
+            overall = "Neutral"
+        cache.write_market_summary(MarketSummary(
+            market=market,
+            overall_sentiment=overall,
+            sentiment_score=avg_score,
+            buy_count=buy_count,
+            sell_count=sell_count,
+            hold_count=hold_count,
+            last_updated=datetime.now(timezone.utc).isoformat(),
+        ))
 
     top = _top_buy_signals(signals, limit=20)
     now_iso = datetime.now(timezone.utc).isoformat()
