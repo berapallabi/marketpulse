@@ -340,11 +340,13 @@ def search_stocks(query: str, market: str, db_path: Path | None = None) -> list[
 
 
 def search_stocks_live(query: str, market: str, db_path: Path | None = None) -> list[dict]:
-    """Search both cached DB stocks and the expanded symbol universe.
+    """Search both the symbol universe and cached DB stocks.
 
-    DB results appear first with _live=False. Universe-only results follow
-    with _live=True. Symbols in both sources are deduplicated (DB wins).
-    Returns [] when len(query) < 2.
+    Universe results come first, using proper company names. Each universe
+    match is checked against the DB: if the symbol exists there, its cached
+    signal/price data is used (_live=False); otherwise a live-fetch placeholder
+    is returned (_live=True). DB-only stocks (outside the universe) that match
+    the query by symbol are appended last. Returns [] when len(query) < 2.
     """
     if len(query) < 2:
         return []
@@ -355,36 +357,66 @@ def search_stocks_live(query: str, market: str, db_path: Path | None = None) -> 
     except (ValueError, KeyError):
         universe = {}
 
-    # DB results (may be empty if DB doesn't exist)
-    db_results = search_stocks(query, market, db_path)
-    cached_symbols = {r["symbol"] for r in db_results}
-    for r in db_results:
-        r["_live"] = False
-
-    # Universe-only results
     q_upper = query.upper()
-    live_results = []
-    for symbol, company_name in universe.items():
-        if symbol in cached_symbols:
-            continue
-        if q_upper in symbol.upper() or q_upper in company_name.upper():
-            live_results.append({
-                "symbol": symbol,
-                "market": market,
-                "company_name": company_name,
-                "signal_type": None,
-                "confidence_score": None,
-                "technical_score": None,
-                "sentiment_score": None,
-                "contributing_factors": None,
-                "generated_at": None,
-                "cap_tier": None,
-                "current_price": None,
-                "last_updated": None,
-                "_live": True,
-            })
+    path = db_path or DB_PATH
 
-    return db_results + live_results
+    # 1. Find all universe symbols matching query (proper company names used here)
+    universe_matches: dict[str, str] = {
+        sym: cname for sym, cname in universe.items()
+        if q_upper in sym.upper() or q_upper in cname.upper()
+    }
+
+    # 2. Bulk-fetch DB data for every matched universe symbol in one round-trip
+    db_data: dict[str, dict] = {}
+    if universe_matches and path.exists():
+        sym_list = list(universe_matches.keys())
+        placeholders = ",".join("?" * len(sym_list))
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                f"SELECT st.symbol, st.market, "
+                f"       s.signal_type, s.confidence_score, s.technical_score, "
+                f"       s.sentiment_score, s.contributing_factors, s.generated_at, "
+                f"       s.cap_tier, p.current_price, p.last_updated "
+                f"FROM stocks st "
+                f"LEFT JOIN signals s ON st.symbol = s.symbol AND st.market = s.market "
+                f"LEFT JOIN price_snapshots p ON st.symbol = p.symbol AND st.market = p.market "
+                f"WHERE st.market = ? AND st.symbol IN ({placeholders})",
+                [market] + sym_list,
+            ).fetchall()
+            db_data = {row["symbol"]: dict(row) for row in rows}
+        finally:
+            conn.close()
+
+    # 3. Build results for universe matches
+    results: list[dict] = []
+    seen: set[str] = set()
+    for sym, cname in universe_matches.items():
+        if sym in db_data:
+            r = db_data[sym]
+            r["company_name"] = cname  # universe name is authoritative
+            r["_live"] = False
+        else:
+            r = {
+                "symbol": sym, "market": market, "company_name": cname,
+                "signal_type": None, "confidence_score": None,
+                "technical_score": None, "sentiment_score": None,
+                "contributing_factors": None, "generated_at": None,
+                "cap_tier": None, "current_price": None,
+                "last_updated": None, "_live": True,
+            }
+        results.append(r)
+        seen.add(sym)
+
+    # 4. Also include DB-only stocks (outside universe) matching the query
+    for r in search_stocks(query, market, db_path):
+        if r["symbol"] not in seen:
+            r["_live"] = False
+            results.append(r)
+            seen.add(r["symbol"])
+
+    return results
 
 
 def read_market_summary(market: str, db_path: Path | None = None) -> dict | None:
