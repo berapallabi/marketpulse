@@ -267,13 +267,23 @@ def read_signals(market: str, db_path: Path | None = None) -> list[dict]:
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT s.*, p.current_price, p.last_updated "
+            "SELECT s.*, p.current_price, p.last_updated, st.company_name "
             "FROM signals s "
             "LEFT JOIN price_snapshots p ON s.symbol = p.symbol AND s.market = p.market "
+            "LEFT JOIN stocks st ON s.symbol = st.symbol AND s.market = st.market "
             "WHERE s.market = ?",
             (market,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        result = [dict(r) for r in rows]
+        if market == "IN":
+            from marketpulse.data.universe import get_universe
+            universe = get_universe("IN")
+            for row in result:
+                sym = row["symbol"]
+                name = row.get("company_name")
+                if not name or name == sym:
+                    row["company_name"] = universe.get(sym, sym)
+        return result
     finally:
         conn.close()
 

@@ -19,6 +19,9 @@ def fetch_quotes(symbols: list[str]) -> list[StockQuote]:
     if nse_eq is None:
         raise DataProviderError("nsepython not available")
 
+    from marketpulse.data.universe import get_universe
+    _universe = get_universe("IN")
+
     results: list[StockQuote] = []
     failed = 0
     now = datetime.now(timezone.utc).isoformat()
@@ -26,10 +29,12 @@ def fetch_quotes(symbols: list[str]) -> list[StockQuote]:
     for symbol in symbols:
         try:
             data = nse_eq(symbol)
+            api_name = data.get("companyName", "")
+            company_name = api_name if api_name and api_name != symbol else _universe.get(symbol, symbol)
             results.append(StockQuote(
                 symbol=symbol,
                 market="IN",
-                company_name=data.get("companyName", symbol),
+                company_name=company_name,
                 current_price=float(data.get("lastPrice", 0)),
                 open_price=_float(data.get("open")),
                 high_price=_float(data.get("dayHigh")),
