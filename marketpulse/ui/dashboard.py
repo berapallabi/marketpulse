@@ -234,6 +234,81 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
     st.session_state.pop(f"_prev_rows_{market}_buy_{slug}_buy", None)
 
 
+def _refresh_section(market: str, section: str, tier_label: str, db_path=None) -> None:
+    """Refresh full analysis for watchlist or holdings symbols in a single tier."""
+    from pathlib import Path
+    from marketpulse.analysis.cap_tiers import classify_cap_tier
+    from marketpulse.analysis.indicators import compute_indicators
+    from marketpulse.analysis.signals import generate_signal
+    from marketpulse.data.sentiment import fetch_market_articles, score_articles_for_stock
+    from marketpulse.data.types import DataProviderError
+
+    if market == "IN":
+        from marketpulse.data.india import fetch_ohlcv_history, fetch_quotes
+    else:
+        from marketpulse.data.us import fetch_ohlcv_history, fetch_quotes
+
+    symbol_set = set(
+        cache.read_watchlist(market, db_path) if section == "watchlist"
+        else cache.read_holdings(market, db_path)
+    )
+    if not symbol_set:
+        return
+
+    signal_rows = cache.read_signals(market, db_path)
+    tier_symbols = [
+        r["symbol"] for r in signal_rows
+        if r.get("cap_tier") == tier_label and r["symbol"] in symbol_set
+    ]
+    if not tier_symbols:
+        return
+
+    try:
+        quotes = fetch_quotes(tier_symbols)
+    except DataProviderError as e:
+        st.error(f"⚠️ Could not fetch quotes: {e}")
+        return
+
+    cache.write_quotes(quotes, db_path)
+
+    articles = []
+    try:
+        articles = fetch_market_articles(market)
+    except Exception:
+        pass
+
+    ohlcv_cache: dict = st.session_state.setdefault(f"ohlcv_{market}", {})
+    signals = []
+    for quote in quotes:
+        try:
+            ohlcv, mc = fetch_ohlcv_history(quote.symbol)
+            if ohlcv is None:
+                continue
+            market_cap = mc if market == "IN" else quote.market_cap
+            technical = compute_indicators(quote.symbol, market, ohlcv)
+            if technical is None:
+                continue
+            sentiment = score_articles_for_stock(articles, quote.symbol, quote.company_name)
+            sentiment.market = market
+            signal = generate_signal(technical, sentiment)
+            signal.cap_tier = classify_cap_tier(market_cap, market)
+            signals.append(signal)
+            cache.write_technical(technical, db_path)
+            cache.write_sentiment(sentiment, db_path)
+            cache.write_news(quote.symbol, market, _news_items_from_sentiment(sentiment), db_path)
+            ohlcv_cache[quote.symbol] = ohlcv
+        except Exception:
+            continue
+
+    if signals:
+        cache.write_signals(signals, db_path)
+
+    slug = tier_label.replace(" ", "_").lower()
+    st.session_state.pop(f"selected_{market}", None)
+    for key in [k for k in st.session_state if k.startswith(f"_prev_rows_{market}_{section}_{slug}")]:
+        st.session_state.pop(key, None)
+
+
 def _rows_last_at(rows: list[dict]) -> str | None:
     """Return the most recent last_updated/generated_at from a list of signal rows, formatted as HH:MM IST."""
     from datetime import timedelta
@@ -338,20 +413,44 @@ def _render_market_tab(market: str) -> None:
 
         filter_col, _ = st.columns([3, 2], gap="large")
         with filter_col:
-            tier_label = st.segmented_control(
-                "Tier",
-                options=tier_labels,
-                default=tier_labels[0],
-                label_visibility="collapsed",
-                key=f"tier_{market}_{signal_slug}",
-            ) or tier_labels[0]
+            seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
+            with seg_col:
+                tier_label = st.segmented_control(
+                    "Tier",
+                    options=tier_labels,
+                    default=tier_labels[0],
+                    label_visibility="collapsed",
+                    key=f"tier_{market}_{signal_slug}",
+                ) or tier_labels[0]
         slug = tier_label.replace(" ", "_").lower()
         tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+        watchlist_symbols = set(cache.read_watchlist(market))
+        watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
+        fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
+        fetching = st.session_state.get(fetching_key, False)
+        with filter_col:
+            with btn_col:
+                if watchlist_rows:
+                    if fetching:
+                        st.button(
+                            "⏳  Refreshing…",
+                            key=f"btn_{market}_{signal_slug}_{slug}",
+                            use_container_width=True,
+                            type="secondary",
+                            disabled=True,
+                        )
+                        _refresh_section(market, "watchlist", tier_label)
+                        st.session_state[fetching_key] = False
+                        st.rerun()
+                    else:
+                        last_at = _rows_last_at(watchlist_rows)
+                        label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
+                        if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                            st.session_state[fetching_key] = True
+                            st.rerun()
 
         list_col, detail_col = st.columns([3, 2], gap="large")
         with list_col:
-            watchlist_symbols = set(cache.read_watchlist(market))
-            watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
             if watchlist_rows:
                 sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
                 if sym:
@@ -373,20 +472,44 @@ def _render_market_tab(market: str) -> None:
 
         filter_col, _ = st.columns([3, 2], gap="large")
         with filter_col:
-            tier_label = st.segmented_control(
-                "Tier",
-                options=tier_labels,
-                default=tier_labels[0],
-                label_visibility="collapsed",
-                key=f"tier_{market}_{signal_slug}",
-            ) or tier_labels[0]
+            seg_col, btn_col = st.columns([5, 4], vertical_alignment="center")
+            with seg_col:
+                tier_label = st.segmented_control(
+                    "Tier",
+                    options=tier_labels,
+                    default=tier_labels[0],
+                    label_visibility="collapsed",
+                    key=f"tier_{market}_{signal_slug}",
+                ) or tier_labels[0]
         slug = tier_label.replace(" ", "_").lower()
         tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+        holdings_symbols = set(cache.read_holdings(market))
+        holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
+        fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
+        fetching = st.session_state.get(fetching_key, False)
+        with filter_col:
+            with btn_col:
+                if holdings_rows:
+                    if fetching:
+                        st.button(
+                            "⏳  Refreshing…",
+                            key=f"btn_{market}_{signal_slug}_{slug}",
+                            use_container_width=True,
+                            type="secondary",
+                            disabled=True,
+                        )
+                        _refresh_section(market, "my_holdings", tier_label)
+                        st.session_state[fetching_key] = False
+                        st.rerun()
+                    else:
+                        last_at = _rows_last_at(holdings_rows)
+                        label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
+                        if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                            st.session_state[fetching_key] = True
+                            st.rerun()
 
         list_col, detail_col = st.columns([3, 2], gap="large")
         with list_col:
-            holdings_symbols = set(cache.read_holdings(market))
-            holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
             if holdings_rows:
                 sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
                 if sym:
