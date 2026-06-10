@@ -190,12 +190,10 @@ def _refresh_tier_buy(market: str, tier_label: str) -> None:
         from statistics import mean
         from marketpulse.analysis.market_summary import MarketSummary
         cache.write_signals(signals)
-        # Count across ALL cached tiers so the gauge reflects the full market
-        all_rows = cache.read_signals(market)
-        buy_count = sum(1 for r in all_rows if r.get("signal_type") == "BUY")
-        sell_count = sum(1 for r in all_rows if r.get("signal_type") == "SELL")
-        hold_count = sum(1 for r in all_rows if r.get("signal_type") == "HOLD")
-        total = len(all_rows)
+        buy_count = sum(1 for s in signals if s.signal_type == "BUY")
+        sell_count = sum(1 for s in signals if s.signal_type == "SELL")
+        hold_count = sum(1 for s in signals if s.signal_type == "HOLD")
+        total = len(signals)
         avg_score = round(mean(s.sentiment_score for s in sentiments), 1) if sentiments else 50.0
         buy_ratio = buy_count / total if total > 0 else 0
         sell_ratio = sell_count / total if total > 0 else 0
