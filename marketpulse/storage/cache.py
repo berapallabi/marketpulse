@@ -339,6 +339,54 @@ def search_stocks(query: str, market: str, db_path: Path | None = None) -> list[
         conn.close()
 
 
+def search_stocks_live(query: str, market: str, db_path: Path | None = None) -> list[dict]:
+    """Search both cached DB stocks and the expanded symbol universe.
+
+    DB results appear first with _live=False. Universe-only results follow
+    with _live=True. Symbols in both sources are deduplicated (DB wins).
+    Returns [] when len(query) < 2.
+    """
+    if len(query) < 2:
+        return []
+
+    from marketpulse.data.universe import get_universe
+    try:
+        universe = get_universe(market)
+    except (ValueError, KeyError):
+        universe = {}
+
+    # DB results (may be empty if DB doesn't exist)
+    db_results = search_stocks(query, market, db_path)
+    cached_symbols = {r["symbol"] for r in db_results}
+    for r in db_results:
+        r["_live"] = False
+
+    # Universe-only results
+    q_upper = query.upper()
+    live_results = []
+    for symbol, company_name in universe.items():
+        if symbol in cached_symbols:
+            continue
+        if q_upper in symbol.upper() or q_upper in company_name.upper():
+            live_results.append({
+                "symbol": symbol,
+                "market": market,
+                "company_name": company_name,
+                "signal_type": None,
+                "confidence_score": None,
+                "technical_score": None,
+                "sentiment_score": None,
+                "contributing_factors": None,
+                "generated_at": None,
+                "cap_tier": None,
+                "current_price": None,
+                "last_updated": None,
+                "_live": True,
+            })
+
+    return db_results + live_results
+
+
 def read_market_summary(market: str, db_path: Path | None = None) -> dict | None:
     path = db_path or DB_PATH
     if not path.exists():

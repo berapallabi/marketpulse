@@ -56,9 +56,10 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
     records = []
     for r in rows:
         records.append({
-            "Signal": r["signal_type"],
-            "Confidence": int(r["confidence_score"]),
+            "Signal": r["signal_type"] or "—",
+            "Confidence": int(r["confidence_score"]) if r.get("confidence_score") is not None else 0,
             "Symbol": r["symbol"],
+            "Company": r.get("company_name") or "",
             "Price": _fmt_price(r.get("current_price"), r.get("market", "")),
         })
     return pd.DataFrame(records)

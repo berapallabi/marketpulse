@@ -22,9 +22,16 @@ def render_stock_detail(
     news_items: list[dict],
     ohlcv_df: pd.DataFrame | None = None,
     key: str = "",
+    live_quote=None,
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
-    st.markdown(f"#### 📊 {symbol}")
+    display_name = symbol
+    price_label = ""
+    if live_quote is not None:
+        display_name = live_quote.company_name or symbol
+        currency = "₹" if market == "IN" else "$"
+        price_label = f" — {currency}{live_quote.current_price:,.2f}"
+    st.markdown(f"#### 📊 {display_name}{price_label}")
     _render_list_actions(symbol, market, key)
     if ohlcv_df is not None and not ohlcv_df.empty:
         _render_price_chart(symbol, ohlcv_df, key=key)

@@ -408,6 +408,8 @@ def _render_market_tab(market: str) -> None:
 
 
 def _render_explore_tab(market: str) -> None:
+    import re
+    from marketpulse.data.types import DataProviderError
     from marketpulse.ui.stock_detail import render_stock_detail
     from marketpulse.ui.stock_list import render_stock_list
 
@@ -420,11 +422,72 @@ def _render_explore_tab(market: str) -> None:
 
     if len(query) < 2:
         st.caption("Enter at least 2 characters to search.")
+        # Clear stale selection when query is too short
+        st.session_state.pop(f"selected_explore_{market}", None)
         return
 
-    results = cache.search_stocks(query, market)
+    # Clear selection when query changes so stale detail panel doesn't linger
+    prev_query_key = f"explore_prev_query_{market}"
+    if st.session_state.get(prev_query_key) != query:
+        st.session_state.pop(f"selected_explore_{market}", None)
+        st.session_state[prev_query_key] = query
+
+    results = cache.search_stocks_live(query, market)
+
+    # Automatic direct-ticker lookup when curated search finds nothing
+    if not results and re.match(r"^[A-Za-z0-9.\-]{2,12}$", query.strip()):
+        ticker_upper = query.strip().upper()
+        lookup_key = f"direct_lookup_{market}_{ticker_upper}"
+        cached_lookup = st.session_state.get(lookup_key)
+
+        if cached_lookup is None:
+            st.caption(
+                f"No results found in universe. Trying direct lookup for '{ticker_upper}'…"
+            )
+            with st.spinner(f"Looking up '{ticker_upper}'…"):
+                if market == "IN":
+                    from marketpulse.data.india import fetch_ohlcv_history, fetch_quotes
+                else:
+                    from marketpulse.data.us import fetch_ohlcv_history, fetch_quotes
+                try:
+                    quotes = fetch_quotes([ticker_upper])
+                    if not quotes:
+                        raise DataProviderError(f"No data found for '{ticker_upper}'")
+                    live_quote = quotes[0]
+                    ohlcv_df, _ = fetch_ohlcv_history(ticker_upper)
+                    # Pre-populate the snapshot so selection needs no re-fetch
+                    st.session_state[f"live_snapshot_{market}_{ticker_upper}"] = {
+                        "quote": live_quote, "ohlcv": ohlcv_df, "error": None,
+                    }
+                    cached_lookup = {
+                        "symbol": live_quote.symbol,
+                        "market": market,
+                        "company_name": live_quote.company_name,
+                        "current_price": live_quote.current_price,
+                        "signal_type": None,
+                        "confidence_score": None,
+                        "technical_score": None,
+                        "sentiment_score": None,
+                        "contributing_factors": None,
+                        "generated_at": None,
+                        "cap_tier": None,
+                        "last_updated": None,
+                        "_live": True,
+                    }
+                    st.session_state[lookup_key] = cached_lookup
+                except Exception as exc:
+                    error_entry = {"error": str(exc)}
+                    st.session_state[lookup_key] = error_entry
+                    cached_lookup = error_entry
+
+        if not cached_lookup or cached_lookup.get("error"):
+            st.caption(f"No results found for '{ticker_upper}'.")
+            return
+
+        results = [cached_lookup]
 
     list_col, detail_col = st.columns([3, 2], gap="large")
+
     with list_col:
         if not results:
             st.caption("No results found.")
@@ -435,13 +498,57 @@ def _render_explore_tab(market: str) -> None:
 
     with detail_col:
         selected = st.session_state.get(f"selected_explore_{market}")
-        if selected:
-            technical = cache.read_technical(selected, market)
-            news_items = cache.read_news(selected, market)
-            ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected)
-            render_stock_detail(selected, market, technical, news_items, ohlcv, key=f"explore_{market}")
-        else:
+        if not selected:
             st.caption("← Select a stock from the list to view details")
+        else:
+            result_row = next((r for r in results if r["symbol"] == selected), None)
+            is_live = result_row.get("_live", False) if result_row else True
+
+            if not is_live:
+                # Cached stock — use DB data immediately
+                technical = cache.read_technical(selected, market)
+                news_items = cache.read_news(selected, market)
+                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected)
+                render_stock_detail(selected, market, technical, news_items, ohlcv, key=f"explore_{market}")
+            else:
+                snapshot_key = f"live_snapshot_{market}_{selected}"
+                snapshot = st.session_state.get(snapshot_key)
+
+                if snapshot is None:
+                    with st.spinner(f"Loading data for {selected}…"):
+                        if market == "IN":
+                            from marketpulse.data.india import fetch_ohlcv_history, fetch_quotes
+                        else:
+                            from marketpulse.data.us import fetch_ohlcv_history, fetch_quotes
+                        try:
+                            quotes = fetch_quotes([selected])
+                            if not quotes:
+                                raise DataProviderError(f"No data returned for {selected}")
+                            live_quote = quotes[0]
+                            ohlcv_df, _ = fetch_ohlcv_history(selected)
+                            snapshot = {"quote": live_quote, "ohlcv": ohlcv_df, "error": None}
+                        except Exception as exc:
+                            snapshot = {"quote": None, "ohlcv": None, "error": str(exc)}
+                    st.session_state[snapshot_key] = snapshot
+
+                if snapshot.get("error"):
+                    st.error(
+                        f"Could not load data for {selected}. "
+                        "Check your connection and try again."
+                    )
+                else:
+                    live_quote = snapshot.get("quote")
+                    ohlcv_df = snapshot.get("ohlcv")
+                    if ohlcv_df is None:
+                        st.caption("Price history unavailable.")
+                    render_stock_detail(
+                        selected, market,
+                        technical=None,
+                        news_items=[],
+                        ohlcv_df=ohlcv_df,
+                        key=f"explore_{market}",
+                        live_quote=live_quote,
+                    )
 
 
 def _news_items_from_sentiment(sentiment) -> list:
