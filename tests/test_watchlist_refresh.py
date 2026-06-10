@@ -374,3 +374,81 @@ class TestRefreshSectionScopeIsolation:
         rows = {r["symbol"]: r for r in read_signals("IN", db)}
         assert rows["VOLTAS"]["confidence_score"] == 72
         assert rows["TCS"]["confidence_score"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Recategorize Section — fixes holdings/watchlist stocks with Unknown cap_tier
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestRecategorizeSectionAssignsCapTier:
+    """_recategorize_section sets cap_tier for holdings with Unknown tier."""
+
+    def test_unknown_holdings_get_cap_tier(self, db):
+        _seed_stock(db, "TCS")
+        # Placeholder signal with Unknown cap_tier (as written by write_live_stock_data when mc=None)
+        write_signals([_make_signal("TCS", "IN", "HOLD", 0, "Unknown")], db)
+        add_to_holdings("TCS", "IN", db)
+
+        mock_quote = _mock_quote("TCS", market_cap=500_000_000_000)
+
+        with (
+            patch("marketpulse.data.india.fetch_quotes", return_value=[mock_quote]),
+            patch("marketpulse.data.india.fetch_ohlcv_history", return_value=(_make_ohlcv(), 500_000_000_000)),
+            patch("streamlit.session_state", {}),
+            patch("streamlit.error"),
+        ):
+            from marketpulse.ui.dashboard import _recategorize_section
+            _recategorize_section("IN", "my_holdings", db_path=db)
+
+        rows = read_signals("IN", db)
+        tcs_row = next(r for r in rows if r["symbol"] == "TCS")
+        assert tcs_row["cap_tier"] not in (None, "Unknown", "")
+
+    def test_no_signal_holdings_get_signal_with_cap_tier(self, db):
+        _seed_stock(db, "INFY")
+        add_to_holdings("INFY", "IN", db)
+        # No signal entry at all
+
+        mock_quote = _mock_quote("INFY", market_cap=200_000_000_000)
+
+        with (
+            patch("marketpulse.data.india.fetch_quotes", return_value=[mock_quote]),
+            patch("marketpulse.data.india.fetch_ohlcv_history", return_value=(_make_ohlcv(), 200_000_000_000)),
+            patch("streamlit.session_state", {}),
+            patch("streamlit.error"),
+        ):
+            from marketpulse.ui.dashboard import _recategorize_section
+            _recategorize_section("IN", "my_holdings", db_path=db)
+
+        rows = read_signals("IN", db)
+        infy_row = next((r for r in rows if r["symbol"] == "INFY"), None)
+        assert infy_row is not None
+        assert infy_row["cap_tier"] not in (None, "Unknown", "")
+
+    def test_already_categorized_signal_not_overwritten(self, db):
+        _seed_stock(db, "RELIANCE")
+        write_signals([_make_signal("RELIANCE", "IN", "BUY", 80, "Large Cap")], db)
+        add_to_holdings("RELIANCE", "IN", db)
+
+        with (
+            patch("marketpulse.data.india.fetch_quotes", return_value=[]),
+            patch("streamlit.session_state", {}),
+            patch("streamlit.error"),
+        ):
+            from marketpulse.ui.dashboard import _recategorize_section
+            _recategorize_section("IN", "my_holdings", db_path=db)
+
+        rows = read_signals("IN", db)
+        rel_row = next(r for r in rows if r["symbol"] == "RELIANCE")
+        # Already categorized — should not be touched
+        assert rel_row["signal_type"] == "BUY"
+        assert rel_row["confidence_score"] == 80
+
+    def test_no_op_when_section_empty(self, db):
+        with (
+            patch("streamlit.session_state", {}),
+            patch("streamlit.error"),
+        ):
+            from marketpulse.ui.dashboard import _recategorize_section
+            _recategorize_section("IN", "my_holdings", db_path=db)
+        assert read_signals("IN", db) == []

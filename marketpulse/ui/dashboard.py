@@ -309,6 +309,54 @@ def _refresh_section(market: str, section: str, tier_label: str, db_path=None) -
         st.session_state.pop(key, None)
 
 
+def _recategorize_section(market: str, section: str, db_path=None) -> None:
+    """Fetch and assign cap_tier for watchlist/holdings symbols that have none or Unknown.
+
+    Calls write_live_stock_data for each uncategorized symbol so it appears in
+    the correct tier tab without running a full analysis pipeline.
+    """
+    from marketpulse.analysis.cap_tiers import classify_cap_tier
+
+    if market == "IN":
+        from marketpulse.data.india import fetch_ohlcv_history, fetch_quotes
+    else:
+        from marketpulse.data.us import fetch_ohlcv_history, fetch_quotes
+
+    symbol_set = set(
+        cache.read_watchlist(market, db_path) if section == "watchlist"
+        else cache.read_holdings(market, db_path)
+    )
+    if not symbol_set:
+        return
+
+    signal_rows = cache.read_signals(market, db_path)
+    categorized = {
+        r["symbol"] for r in signal_rows
+        if r.get("cap_tier") not in (None, "Unknown", "")
+    }
+    uncategorized = [sym for sym in symbol_set if sym not in categorized]
+    if not uncategorized:
+        return
+
+    try:
+        quotes = fetch_quotes(uncategorized)
+    except Exception:
+        return
+
+    quote_map = {q.symbol: q for q in quotes}
+    for sym in uncategorized:
+        quote = quote_map.get(sym)
+        if not quote:
+            continue
+        try:
+            ohlcv_df, mc = fetch_ohlcv_history(sym)
+            market_cap = mc if market == "IN" else quote.market_cap
+            cap_tier = classify_cap_tier(market_cap, market)
+            cache.write_live_stock_data(quote, cap_tier, db_path=db_path)
+        except Exception:
+            continue
+
+
 def _rows_last_at(rows: list[dict]) -> str | None:
     """Return the most recent last_updated/generated_at from a list of signal rows, formatted as HH:MM IST."""
     from datetime import timedelta
@@ -467,6 +515,45 @@ def _render_market_tab(market: str) -> None:
             else:
                 st.caption("← Select a stock from the list to view details")
 
+        categorized_symbols = {
+            r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
+        }
+        uncategorized_watchlist = watchlist_symbols - categorized_symbols
+        if uncategorized_watchlist:
+            recategorize_key = f"recategorizing_{market}_{signal_slug}"
+            with st.expander(
+                f"⚠️  {len(uncategorized_watchlist)} watchlist stock(s) not showing in any tier",
+                expanded=True,
+            ):
+                from marketpulse.data.universe import get_universe as _get_universe
+                _universe = _get_universe(market)
+                sym_labels = sorted(
+                    _universe.get(s, s) if _universe.get(s, s) != s else s
+                    for s in uncategorized_watchlist
+                )
+                st.caption("Stocks: " + ", ".join(sym_labels))
+                st.caption("These stocks have no market-cap tier yet — refresh to assign them to the correct tier.")
+                if st.session_state.get(recategorize_key, False):
+                    st.button(
+                        "⏳  Categorizing…",
+                        key=f"btn_recategorize_{market}_{signal_slug}",
+                        disabled=True,
+                        use_container_width=True,
+                        type="secondary",
+                    )
+                    _recategorize_section(market, "watchlist")
+                    st.session_state[recategorize_key] = False
+                    st.rerun()
+                else:
+                    if st.button(
+                        "🔄  Refresh to categorize",
+                        key=f"btn_recategorize_{market}_{signal_slug}",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        st.session_state[recategorize_key] = True
+                        st.rerun()
+
     with holdings_tab:
         signal_slug = "my_holdings"
 
@@ -525,6 +612,45 @@ def _render_market_tab(market: str) -> None:
                 render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
             else:
                 st.caption("← Select a stock from the list to view details")
+
+        categorized_symbols = {
+            r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
+        }
+        uncategorized_holdings = holdings_symbols - categorized_symbols
+        if uncategorized_holdings:
+            recategorize_key = f"recategorizing_{market}_{signal_slug}"
+            with st.expander(
+                f"⚠️  {len(uncategorized_holdings)} holding(s) not showing in any tier",
+                expanded=True,
+            ):
+                from marketpulse.data.universe import get_universe as _get_universe
+                _universe = _get_universe(market)
+                sym_labels = sorted(
+                    _universe.get(s, s) if _universe.get(s, s) != s else s
+                    for s in uncategorized_holdings
+                )
+                st.caption("Stocks: " + ", ".join(sym_labels))
+                st.caption("These stocks have no market-cap tier yet — refresh to assign them to the correct tier.")
+                if st.session_state.get(recategorize_key, False):
+                    st.button(
+                        "⏳  Categorizing…",
+                        key=f"btn_recategorize_{market}_{signal_slug}",
+                        disabled=True,
+                        use_container_width=True,
+                        type="secondary",
+                    )
+                    _recategorize_section(market, "my_holdings")
+                    st.session_state[recategorize_key] = False
+                    st.rerun()
+                else:
+                    if st.button(
+                        "🔄  Refresh to categorize",
+                        key=f"btn_recategorize_{market}_{signal_slug}",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        st.session_state[recategorize_key] = True
+                        st.rerun()
 
     with explore_tab:
         _render_explore_tab(market)
@@ -630,6 +756,9 @@ def _render_explore_tab(market: str) -> None:
         else:
             result_row = next((r for r in results if r["symbol"] == selected), None)
             is_live = result_row.get("_live", False) if result_row else True
+            # Force live fetch if cap_tier is unknown — ensures stock appears in Holdings/Watchlist tabs
+            if not is_live and result_row and result_row.get("cap_tier") in (None, "Unknown", ""):
+                is_live = True
 
             if not is_live:
                 # Cached stock — use DB data immediately
