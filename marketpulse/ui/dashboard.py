@@ -454,10 +454,14 @@ def _render_explore_tab(market: str) -> None:
                     if not quotes:
                         raise DataProviderError(f"No data found for '{ticker_upper}'")
                     live_quote = quotes[0]
-                    ohlcv_df, _ = fetch_ohlcv_history(ticker_upper)
+                    ohlcv_df, mc = fetch_ohlcv_history(ticker_upper)
+                    market_cap = mc if market == "IN" else live_quote.market_cap
+                    from marketpulse.analysis.cap_tiers import classify_cap_tier
+                    cap_tier = classify_cap_tier(market_cap, market)
+                    cache.write_live_stock_data(live_quote, cap_tier)
                     # Pre-populate the snapshot so selection needs no re-fetch
                     st.session_state[f"live_snapshot_{market}_{ticker_upper}"] = {
-                        "quote": live_quote, "ohlcv": ohlcv_df, "error": None,
+                        "quote": live_quote, "ohlcv": ohlcv_df, "cap_tier": cap_tier, "error": None,
                     }
                     cached_lookup = {
                         "symbol": live_quote.symbol,
@@ -470,7 +474,7 @@ def _render_explore_tab(market: str) -> None:
                         "sentiment_score": None,
                         "contributing_factors": None,
                         "generated_at": None,
-                        "cap_tier": None,
+                        "cap_tier": cap_tier,
                         "last_updated": None,
                         "_live": True,
                     }
@@ -525,10 +529,15 @@ def _render_explore_tab(market: str) -> None:
                             if not quotes:
                                 raise DataProviderError(f"No data returned for {selected}")
                             live_quote = quotes[0]
-                            ohlcv_df, _ = fetch_ohlcv_history(selected)
-                            snapshot = {"quote": live_quote, "ohlcv": ohlcv_df, "error": None}
+                            ohlcv_df, mc = fetch_ohlcv_history(selected)
+                            market_cap = mc if market == "IN" else live_quote.market_cap
+                            from marketpulse.analysis.cap_tiers import classify_cap_tier
+                            cap_tier = classify_cap_tier(market_cap, market)
+                            universe_name = result_row.get("company_name") if result_row else None
+                            cache.write_live_stock_data(live_quote, cap_tier, company_name=universe_name)
+                            snapshot = {"quote": live_quote, "ohlcv": ohlcv_df, "cap_tier": cap_tier, "error": None}
                         except Exception as exc:
-                            snapshot = {"quote": None, "ohlcv": None, "error": str(exc)}
+                            snapshot = {"quote": None, "ohlcv": None, "cap_tier": None, "error": str(exc)}
                     st.session_state[snapshot_key] = snapshot
 
                 if snapshot.get("error"):

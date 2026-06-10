@@ -419,6 +419,56 @@ def search_stocks_live(query: str, market: str, db_path: Path | None = None) -> 
     return results
 
 
+def write_live_stock_data(
+    quote,
+    cap_tier: str,
+    company_name: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    """Persist minimal stock/price/signal data for a live-fetched stock.
+
+    Ensures the stock appears under the correct cap-tier in watchlist and
+    holdings tabs without requiring a full analysis run.  Uses
+    INSERT OR IGNORE for the signal row so existing analysis is never
+    overwritten.  Also backfills cap_tier on any existing signal that still
+    has the default 'Unknown' value.
+    """
+    path = db_path or DB_PATH
+    now = datetime.now(timezone.utc).isoformat()
+    display_name = company_name or quote.company_name
+    conn = sqlite3.connect(path)
+    try:
+        _upsert(conn, "stocks", ["symbol", "market"], {
+            "symbol": quote.symbol, "market": quote.market,
+            "company_name": display_name, "sector": None,
+            "currency": quote.currency,
+        })
+        _upsert(conn, "price_snapshots", ["symbol", "market"], {
+            "symbol": quote.symbol, "market": quote.market,
+            "current_price": quote.current_price, "open_price": quote.open_price,
+            "high_price": quote.high_price, "low_price": quote.low_price,
+            "volume": quote.volume, "last_updated": now,
+        })
+        # Placeholder signal — INSERT OR IGNORE preserves real analysis data
+        conn.execute(
+            "INSERT OR IGNORE INTO signals "
+            "(symbol, market, signal_type, confidence_score, technical_score, "
+            " sentiment_score, contributing_factors, generated_at, cap_tier) "
+            "VALUES (?, ?, 'HOLD', 0, 0.0, 0.0, NULL, ?, ?)",
+            (quote.symbol, quote.market, now, cap_tier),
+        )
+        # Backfill cap_tier on any existing placeholder that still says Unknown
+        conn.execute(
+            "UPDATE signals SET cap_tier = ? "
+            "WHERE symbol = ? AND market = ? "
+            "  AND (cap_tier IS NULL OR cap_tier = 'Unknown')",
+            (cap_tier, quote.symbol, quote.market),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def read_market_summary(market: str, db_path: Path | None = None) -> dict | None:
     path = db_path or DB_PATH
     if not path.exists():
