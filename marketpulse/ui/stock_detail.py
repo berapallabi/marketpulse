@@ -25,12 +25,14 @@ def render_stock_detail(
     live_quote=None,
 ) -> None:
     """Render drill-down detail panel for a selected stock."""
-    display_name = symbol
     price_label = ""
     if live_quote is not None:
         display_name = live_quote.company_name or symbol
         currency = "₹" if market == "IN" else "$"
         price_label = f" — {currency}{live_quote.current_price:,.2f}"
+    else:
+        from marketpulse.data.universe import get_universe
+        display_name = get_universe(market).get(symbol, symbol)
     st.markdown(f"#### 📊 {display_name}{price_label}")
     _render_list_actions(symbol, market, key)
     if ohlcv_df is not None and not ohlcv_df.empty:
