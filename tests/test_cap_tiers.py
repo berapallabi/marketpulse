@@ -52,9 +52,10 @@ def test_us_mid_cap():
     assert classify_cap_tier(5e9, "US") == "Mid Cap"
 
 
-def test_us_small_cap():
+def test_us_small_cap_now_mid_cap():
+    # US Small Cap tier removed — stocks below $10B now fall into Mid Cap
     from marketpulse.analysis.cap_tiers import classify_cap_tier
-    assert classify_cap_tier(1e9, "US") == "Small Cap"
+    assert classify_cap_tier(1e9, "US") == "Mid Cap"
 
 
 def test_invalid_market_raises_value_error():
@@ -70,4 +71,4 @@ def test_india_tier_order_constant():
 
 def test_us_tier_order_constant():
     from marketpulse.analysis.cap_tiers import US_TIER_ORDER
-    assert US_TIER_ORDER == ["Mega Cap", "Large Cap", "Mid Cap", "Small Cap"]
+    assert US_TIER_ORDER == ["Mega Cap", "Large Cap", "Mid Cap"]

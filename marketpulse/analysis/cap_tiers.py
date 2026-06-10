@@ -1,5 +1,5 @@
 INDIA_TIER_ORDER = ["Large Cap", "Mid Cap", "Small Cap"]
-US_TIER_ORDER = ["Mega Cap", "Large Cap", "Mid Cap", "Small Cap"]
+US_TIER_ORDER = ["Mega Cap", "Large Cap", "Mid Cap"]
 
 # Each entry: (label, lower_bound_inclusive, upper_bound_exclusive | None)
 _INDIA_TIERS = [
@@ -11,8 +11,7 @@ _INDIA_TIERS = [
 _US_TIERS = [
     ("Mega Cap",  2e11, None),
     ("Large Cap", 1e10, 2e11),
-    ("Mid Cap",   2e9,  1e10),
-    ("Small Cap", 0,    2e9),
+    ("Mid Cap",   0,    1e10),
 ]
 
 
