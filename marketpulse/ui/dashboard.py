@@ -415,9 +415,10 @@ def _render_market_tab(market: str) -> None:
             with btn_col:
                 rows_for_ts = st.session_state.get(f"tier_buy_{market}_{signal_slug}_{slug}") or tier_rows
                 last_at = _rows_last_at(rows_for_ts)
+                _, inner = st.columns([1, 3])
                 if fetching:
-                    st.button(
-                        "⏳  Fetching latest details…",
+                    inner.button(
+                        "⏳  Refreshing…",
                         key=f"btn_tier_buy_{market}_{signal_slug}_{slug}",
                         use_container_width=True,
                         type="secondary",
@@ -427,8 +428,8 @@ def _render_market_tab(market: str) -> None:
                     st.session_state[fetching_key] = False
                     st.rerun()
                 else:
-                    label = f"🔄  Refresh now  ·  last at {last_at}" if last_at else "🔄  Refresh now"
-                    if st.button(label, key=f"btn_tier_buy_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                    label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
+                    if inner.button(label, key=f"btn_tier_buy_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
                         st.session_state[fetching_key] = True
                         st.rerun()
 
@@ -482,8 +483,9 @@ def _render_market_tab(market: str) -> None:
             with filter_col:
                 with btn_col:
                     if uncategorized_watchlist:
+                        _, inner = st.columns([1, 3])
                         if st.session_state.get(recategorize_key, False):
-                            st.button(
+                            inner.button(
                                 "⏳  Categorizing…",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 disabled=True,
@@ -494,7 +496,7 @@ def _render_market_tab(market: str) -> None:
                             st.session_state[recategorize_key] = False
                             st.rerun()
                         else:
-                            if st.button(
+                            if inner.button(
                                 "🔄  Refresh to categorize",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 use_container_width=True,
@@ -538,8 +540,9 @@ def _render_market_tab(market: str) -> None:
             with filter_col:
                 with btn_col:
                     if watchlist_rows:
+                        _, inner = st.columns([1, 3])
                         if fetching:
-                            st.button(
+                            inner.button(
                                 "⏳  Refreshing…",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 use_container_width=True,
@@ -552,7 +555,7 @@ def _render_market_tab(market: str) -> None:
                         else:
                             last_at = _rows_last_at(watchlist_rows)
                             label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
-                            if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                            if inner.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
                                 st.session_state[fetching_key] = True
                                 st.rerun()
 
@@ -600,8 +603,9 @@ def _render_market_tab(market: str) -> None:
             with filter_col:
                 with btn_col:
                     if uncategorized_holdings:
+                        _, inner = st.columns([1, 3])
                         if st.session_state.get(recategorize_key, False):
-                            st.button(
+                            inner.button(
                                 "⏳  Categorizing…",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 disabled=True,
@@ -612,7 +616,7 @@ def _render_market_tab(market: str) -> None:
                             st.session_state[recategorize_key] = False
                             st.rerun()
                         else:
-                            if st.button(
+                            if inner.button(
                                 "🔄  Refresh to categorize",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 use_container_width=True,
@@ -656,8 +660,9 @@ def _render_market_tab(market: str) -> None:
             with filter_col:
                 with btn_col:
                     if holdings_rows:
+                        _, inner = st.columns([1, 3])
                         if fetching:
-                            st.button(
+                            inner.button(
                                 "⏳  Refreshing…",
                                 key=f"btn_{market}_{signal_slug}_{slug}",
                                 use_container_width=True,
@@ -670,7 +675,7 @@ def _render_market_tab(market: str) -> None:
                         else:
                             last_at = _rows_last_at(holdings_rows)
                             label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
-                            if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                            if inner.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
                                 st.session_state[fetching_key] = True
                                 st.rerun()
 
