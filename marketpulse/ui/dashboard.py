@@ -465,94 +465,114 @@ def _render_market_tab(market: str) -> None:
             with seg_col:
                 tier_label = st.segmented_control(
                     "Tier",
-                    options=tier_labels,
+                    options=tier_labels + ["Unrecognised"],
                     default=tier_labels[0],
                     label_visibility="collapsed",
                     key=f"tier_{market}_{signal_slug}",
                 ) or tier_labels[0]
         slug = tier_label.replace(" ", "_").lower()
-        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
         watchlist_symbols = set(cache.read_watchlist(market))
-        watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
-        fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
-        fetching = st.session_state.get(fetching_key, False)
-        with filter_col:
-            with btn_col:
-                if watchlist_rows:
-                    if fetching:
-                        st.button(
-                            "⏳  Refreshing…",
-                            key=f"btn_{market}_{signal_slug}_{slug}",
-                            use_container_width=True,
-                            type="secondary",
-                            disabled=True,
-                        )
-                        _refresh_section(market, "watchlist", tier_label)
-                        st.session_state[fetching_key] = False
-                        st.rerun()
-                    else:
-                        last_at = _rows_last_at(watchlist_rows)
-                        label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
-                        if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
-                            st.session_state[fetching_key] = True
-                            st.rerun()
 
-        list_col, detail_col = st.columns([3, 2], gap="large")
-        with list_col:
-            if watchlist_rows:
-                sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
-            else:
-                st.caption("No stocks in your watchlist yet.")
-        with detail_col:
-            selected_symbol = st.session_state.get(f"selected_{market}")
-            if selected_symbol:
-                technical = cache.read_technical(selected_symbol, market)
-                news_items = cache.read_news(selected_symbol, market)
-                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-                render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
-            else:
-                st.caption("← Select a stock from the list to view details")
-
-        categorized_symbols = {
-            r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
-        }
-        uncategorized_watchlist = watchlist_symbols - categorized_symbols
-        if uncategorized_watchlist:
+        if tier_label == "Unrecognised":
+            categorized_symbols = {
+                r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
+            }
+            uncategorized_watchlist = watchlist_symbols - categorized_symbols
             recategorize_key = f"recategorizing_{market}_{signal_slug}"
-            with st.expander(
-                f"⚠️  {len(uncategorized_watchlist)} watchlist stock(s) not showing in any tier",
-                expanded=True,
-            ):
-                from marketpulse.data.universe import get_universe as _get_universe
-                _universe = _get_universe(market)
-                sym_labels = sorted(
-                    _universe.get(s, s) if _universe.get(s, s) != s else s
-                    for s in uncategorized_watchlist
-                )
-                st.caption("Stocks: " + ", ".join(sym_labels))
-                st.caption("These stocks have no market-cap tier yet — refresh to assign them to the correct tier.")
-                if st.session_state.get(recategorize_key, False):
-                    st.button(
-                        "⏳  Categorizing…",
-                        key=f"btn_recategorize_{market}_{signal_slug}",
-                        disabled=True,
-                        use_container_width=True,
-                        type="secondary",
-                    )
-                    _recategorize_section(market, "watchlist")
-                    st.session_state[recategorize_key] = False
-                    st.rerun()
+            with filter_col:
+                with btn_col:
+                    if uncategorized_watchlist:
+                        if st.session_state.get(recategorize_key, False):
+                            st.button(
+                                "⏳  Categorizing…",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                disabled=True,
+                                use_container_width=True,
+                                type="secondary",
+                            )
+                            _recategorize_section(market, "watchlist")
+                            st.session_state[recategorize_key] = False
+                            st.rerun()
+                        else:
+                            if st.button(
+                                "🔄  Refresh to categorize",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                use_container_width=True,
+                                type="secondary",
+                            ):
+                                st.session_state[recategorize_key] = True
+                                st.rerun()
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            with list_col:
+                if uncategorized_watchlist:
+                    from marketpulse.data.universe import get_universe as _get_universe
+                    _universe = _get_universe(market)
+                    signal_map = {r["symbol"]: r for r in signal_rows}
+                    uncat_rows = [
+                        signal_map[sym] if sym in signal_map else {
+                            "symbol": sym, "market": market,
+                            "company_name": _universe.get(sym, sym),
+                            "signal_type": None, "confidence_score": None, "current_price": None,
+                        }
+                        for sym in sorted(uncategorized_watchlist)
+                    ]
+                    sym = render_stock_list(uncat_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
                 else:
-                    if st.button(
-                        "🔄  Refresh to categorize",
-                        key=f"btn_recategorize_{market}_{signal_slug}",
-                        use_container_width=True,
-                        type="secondary",
-                    ):
-                        st.session_state[recategorize_key] = True
-                        st.rerun()
+                    st.caption("No unrecognised stocks in your watchlist.")
+            with detail_col:
+                selected_symbol = st.session_state.get(f"selected_{market}")
+                if selected_symbol:
+                    technical = cache.read_technical(selected_symbol, market)
+                    news_items = cache.read_news(selected_symbol, market)
+                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+                else:
+                    st.caption("← Select a stock from the list to view details")
+        else:
+            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+            watchlist_rows = [r for r in tier_rows if r.get("symbol") in watchlist_symbols]
+            fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
+            fetching = st.session_state.get(fetching_key, False)
+            with filter_col:
+                with btn_col:
+                    if watchlist_rows:
+                        if fetching:
+                            st.button(
+                                "⏳  Refreshing…",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                use_container_width=True,
+                                type="secondary",
+                                disabled=True,
+                            )
+                            _refresh_section(market, "watchlist", tier_label)
+                            st.session_state[fetching_key] = False
+                            st.rerun()
+                        else:
+                            last_at = _rows_last_at(watchlist_rows)
+                            label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
+                            if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                                st.session_state[fetching_key] = True
+                                st.rerun()
+
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            with list_col:
+                if watchlist_rows:
+                    sym = render_stock_list(watchlist_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
+                else:
+                    st.caption("No stocks in your watchlist yet.")
+            with detail_col:
+                selected_symbol = st.session_state.get(f"selected_{market}")
+                if selected_symbol:
+                    technical = cache.read_technical(selected_symbol, market)
+                    news_items = cache.read_news(selected_symbol, market)
+                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+                else:
+                    st.caption("← Select a stock from the list to view details")
 
     with holdings_tab:
         signal_slug = "my_holdings"
@@ -563,94 +583,114 @@ def _render_market_tab(market: str) -> None:
             with seg_col:
                 tier_label = st.segmented_control(
                     "Tier",
-                    options=tier_labels,
+                    options=tier_labels + ["Unrecognised"],
                     default=tier_labels[0],
                     label_visibility="collapsed",
                     key=f"tier_{market}_{signal_slug}",
                 ) or tier_labels[0]
         slug = tier_label.replace(" ", "_").lower()
-        tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
         holdings_symbols = set(cache.read_holdings(market))
-        holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
-        fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
-        fetching = st.session_state.get(fetching_key, False)
-        with filter_col:
-            with btn_col:
-                if holdings_rows:
-                    if fetching:
-                        st.button(
-                            "⏳  Refreshing…",
-                            key=f"btn_{market}_{signal_slug}_{slug}",
-                            use_container_width=True,
-                            type="secondary",
-                            disabled=True,
-                        )
-                        _refresh_section(market, "my_holdings", tier_label)
-                        st.session_state[fetching_key] = False
-                        st.rerun()
-                    else:
-                        last_at = _rows_last_at(holdings_rows)
-                        label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
-                        if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
-                            st.session_state[fetching_key] = True
-                            st.rerun()
 
-        list_col, detail_col = st.columns([3, 2], gap="large")
-        with list_col:
-            if holdings_rows:
-                sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
-                if sym:
-                    st.session_state[f"selected_{market}"] = sym
-            else:
-                st.caption("No holdings added yet.")
-        with detail_col:
-            selected_symbol = st.session_state.get(f"selected_{market}")
-            if selected_symbol:
-                technical = cache.read_technical(selected_symbol, market)
-                news_items = cache.read_news(selected_symbol, market)
-                ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
-                render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
-            else:
-                st.caption("← Select a stock from the list to view details")
-
-        categorized_symbols = {
-            r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
-        }
-        uncategorized_holdings = holdings_symbols - categorized_symbols
-        if uncategorized_holdings:
+        if tier_label == "Unrecognised":
+            categorized_symbols = {
+                r["symbol"] for r in signal_rows if r.get("cap_tier") not in (None, "Unknown", "")
+            }
+            uncategorized_holdings = holdings_symbols - categorized_symbols
             recategorize_key = f"recategorizing_{market}_{signal_slug}"
-            with st.expander(
-                f"⚠️  {len(uncategorized_holdings)} holding(s) not showing in any tier",
-                expanded=True,
-            ):
-                from marketpulse.data.universe import get_universe as _get_universe
-                _universe = _get_universe(market)
-                sym_labels = sorted(
-                    _universe.get(s, s) if _universe.get(s, s) != s else s
-                    for s in uncategorized_holdings
-                )
-                st.caption("Stocks: " + ", ".join(sym_labels))
-                st.caption("These stocks have no market-cap tier yet — refresh to assign them to the correct tier.")
-                if st.session_state.get(recategorize_key, False):
-                    st.button(
-                        "⏳  Categorizing…",
-                        key=f"btn_recategorize_{market}_{signal_slug}",
-                        disabled=True,
-                        use_container_width=True,
-                        type="secondary",
-                    )
-                    _recategorize_section(market, "my_holdings")
-                    st.session_state[recategorize_key] = False
-                    st.rerun()
+            with filter_col:
+                with btn_col:
+                    if uncategorized_holdings:
+                        if st.session_state.get(recategorize_key, False):
+                            st.button(
+                                "⏳  Categorizing…",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                disabled=True,
+                                use_container_width=True,
+                                type="secondary",
+                            )
+                            _recategorize_section(market, "my_holdings")
+                            st.session_state[recategorize_key] = False
+                            st.rerun()
+                        else:
+                            if st.button(
+                                "🔄  Refresh to categorize",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                use_container_width=True,
+                                type="secondary",
+                            ):
+                                st.session_state[recategorize_key] = True
+                                st.rerun()
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            with list_col:
+                if uncategorized_holdings:
+                    from marketpulse.data.universe import get_universe as _get_universe
+                    _universe = _get_universe(market)
+                    signal_map = {r["symbol"]: r for r in signal_rows}
+                    uncat_rows = [
+                        signal_map[sym] if sym in signal_map else {
+                            "symbol": sym, "market": market,
+                            "company_name": _universe.get(sym, sym),
+                            "signal_type": None, "confidence_score": None, "current_price": None,
+                        }
+                        for sym in sorted(uncategorized_holdings)
+                    ]
+                    sym = render_stock_list(uncat_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
                 else:
-                    if st.button(
-                        "🔄  Refresh to categorize",
-                        key=f"btn_recategorize_{market}_{signal_slug}",
-                        use_container_width=True,
-                        type="secondary",
-                    ):
-                        st.session_state[recategorize_key] = True
-                        st.rerun()
+                    st.caption("No unrecognised stocks in your holdings.")
+            with detail_col:
+                selected_symbol = st.session_state.get(f"selected_{market}")
+                if selected_symbol:
+                    technical = cache.read_technical(selected_symbol, market)
+                    news_items = cache.read_news(selected_symbol, market)
+                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+                else:
+                    st.caption("← Select a stock from the list to view details")
+        else:
+            tier_rows = [r for r in signal_rows if r.get("cap_tier") == tier_label]
+            holdings_rows = [r for r in tier_rows if r.get("symbol") in holdings_symbols]
+            fetching_key = f"fetching_{market}_{signal_slug}_{slug}"
+            fetching = st.session_state.get(fetching_key, False)
+            with filter_col:
+                with btn_col:
+                    if holdings_rows:
+                        if fetching:
+                            st.button(
+                                "⏳  Refreshing…",
+                                key=f"btn_{market}_{signal_slug}_{slug}",
+                                use_container_width=True,
+                                type="secondary",
+                                disabled=True,
+                            )
+                            _refresh_section(market, "my_holdings", tier_label)
+                            st.session_state[fetching_key] = False
+                            st.rerun()
+                        else:
+                            last_at = _rows_last_at(holdings_rows)
+                            label = f"🔄  Refresh  ·  last at {last_at}" if last_at else "🔄  Refresh"
+                            if st.button(label, key=f"btn_{market}_{signal_slug}_{slug}", use_container_width=True, type="secondary"):
+                                st.session_state[fetching_key] = True
+                                st.rerun()
+
+            list_col, detail_col = st.columns([3, 2], gap="large")
+            with list_col:
+                if holdings_rows:
+                    sym = render_stock_list(holdings_rows, market, filter_signal="ALL", key_prefix=f"{signal_slug}_{tier_label}")
+                    if sym:
+                        st.session_state[f"selected_{market}"] = sym
+                else:
+                    st.caption("No holdings added yet.")
+            with detail_col:
+                selected_symbol = st.session_state.get(f"selected_{market}")
+                if selected_symbol:
+                    technical = cache.read_technical(selected_symbol, market)
+                    news_items = cache.read_news(selected_symbol, market)
+                    ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected_symbol)
+                    render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
+                else:
+                    st.caption("← Select a stock from the list to view details")
 
     with explore_tab:
         _render_explore_tab(market)
