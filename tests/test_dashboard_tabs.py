@@ -72,7 +72,7 @@ class TestTabOptions:
         import inspect
         src = inspect.getsource(dashboard._render_market_tab)
         # Buy is the first tab in st.tabs(), making it the default selection
-        assert 'st.tabs(["Buy", "Watchlist", "My Holdings"])' in src
+        assert 'st.tabs(["Buy", "Watchlist", "My Holdings", "Explore"])' in src
 
 
 # ── US1: Buy tab regression ────────────────────────────────────────────────────

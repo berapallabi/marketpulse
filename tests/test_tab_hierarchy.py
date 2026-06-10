@@ -13,7 +13,7 @@ class TestOuterTabIsSignal:
 
     def test_outer_tabs_are_buy_watchlist_holdings(self):
         src = inspect.getsource(dashboard._render_market_tab)
-        assert 'st.tabs(["Buy", "Watchlist", "My Holdings"])' in src
+        assert 'st.tabs(["Buy", "Watchlist", "My Holdings", "Explore"])' in src
 
     def test_old_outer_tier_tabs_call_absent(self):
         """T003 — old tier_tabs = st.tabs(tier_labels) outer loop is removed."""
@@ -59,7 +59,7 @@ class TestVisualDesignSwap:
     def test_outer_component_is_st_tabs(self):
         """st.tabs() on outer row provides the bold tab style automatically."""
         src = inspect.getsource(dashboard._render_market_tab)
-        assert 'st.tabs(["Buy", "Watchlist", "My Holdings"])' in src
+        assert 'st.tabs(["Buy", "Watchlist", "My Holdings", "Explore"])' in src
 
     def test_inner_component_is_segmented_control(self):
         """st.segmented_control() on inner row provides the compact pill style automatically."""

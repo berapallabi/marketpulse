@@ -268,7 +268,7 @@ def _render_market_tab(market: str) -> None:
     signal_rows = cache.read_signals(market)
     tier_labels = INDIA_TIER_ORDER if market == "IN" else US_TIER_ORDER
 
-    buy_tab, watchlist_tab, holdings_tab = st.tabs(["Buy", "Watchlist", "My Holdings"])
+    buy_tab, watchlist_tab, holdings_tab, explore_tab = st.tabs(["Buy", "Watchlist", "My Holdings", "Explore"])
 
     with buy_tab:
         signal_slug = "buy"
@@ -402,6 +402,46 @@ def _render_market_tab(market: str) -> None:
                 render_stock_detail(selected_symbol, market, technical, news_items, ohlcv, key=f"{signal_slug}_{slug}")
             else:
                 st.caption("← Select a stock from the list to view details")
+
+    with explore_tab:
+        _render_explore_tab(market)
+
+
+def _render_explore_tab(market: str) -> None:
+    from marketpulse.ui.stock_detail import render_stock_detail
+    from marketpulse.ui.stock_list import render_stock_list
+
+    query = st.text_input(
+        "Search",
+        placeholder="Search by name or symbol…",
+        label_visibility="collapsed",
+        key=f"explore_query_{market}",
+    )
+
+    if len(query) < 2:
+        st.caption("Enter at least 2 characters to search.")
+        return
+
+    results = cache.search_stocks(query, market)
+
+    list_col, detail_col = st.columns([3, 2], gap="large")
+    with list_col:
+        if not results:
+            st.caption("No results found.")
+        else:
+            sym = render_stock_list(results, market, filter_signal="ALL", key_prefix=f"explore_{market}")
+            if sym:
+                st.session_state[f"selected_explore_{market}"] = sym
+
+    with detail_col:
+        selected = st.session_state.get(f"selected_explore_{market}")
+        if selected:
+            technical = cache.read_technical(selected, market)
+            news_items = cache.read_news(selected, market)
+            ohlcv = st.session_state.get(f"ohlcv_{market}", {}).get(selected)
+            render_stock_detail(selected, market, technical, news_items, ohlcv, key=f"explore_{market}")
+        else:
+            st.caption("← Select a stock from the list to view details")
 
 
 def _news_items_from_sentiment(sentiment) -> list:

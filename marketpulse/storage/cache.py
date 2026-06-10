@@ -311,6 +311,34 @@ def read_news(symbol: str, market: str, db_path: Path | None = None) -> list[dic
         conn.close()
 
 
+def search_stocks(query: str, market: str, db_path: Path | None = None) -> list[dict]:
+    if len(query) < 2:
+        return []
+    path = db_path or DB_PATH
+    if not path.exists():
+        return []
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    pattern = f"%{query}%"
+    try:
+        rows = conn.execute(
+            "SELECT st.symbol, st.company_name, st.market, "
+            "       s.signal_type, s.confidence_score, s.technical_score, "
+            "       s.sentiment_score, s.contributing_factors, s.generated_at, "
+            "       s.cap_tier, p.current_price, p.last_updated "
+            "FROM stocks st "
+            "LEFT JOIN signals s ON st.symbol = s.symbol AND st.market = s.market "
+            "LEFT JOIN price_snapshots p ON st.symbol = p.symbol AND st.market = p.market "
+            "WHERE st.market = ? "
+            "  AND (UPPER(st.symbol) LIKE UPPER(?) OR UPPER(st.company_name) LIKE UPPER(?)) "
+            "ORDER BY st.symbol",
+            (market, pattern, pattern),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def read_market_summary(market: str, db_path: Path | None = None) -> dict | None:
     path = db_path or DB_PATH
     if not path.exists():
